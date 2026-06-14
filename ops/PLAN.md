@@ -44,7 +44,7 @@ ninja -C "$B" check-clang                     # full regression gate
 
 ### Phase A — Clang infix operator (MVP, desugar-only)
 - [x] **S00** Baseline build + harness orientation — `ops/steps/00-baseline.md`
-- [ ] **S01** Feature flag `-fbacktick` — `ops/steps/01-feature-flag.md` (dep: S00)
+- [x] **S01** Feature flag `-fbacktick` — `ops/steps/01-feature-flag.md` (dep: S00)
 - [ ] **S02** Lexer: backtick punctuator token — `ops/steps/02-lexer-token.md` (dep: S01)
 - [ ] **S03** Parse + desugar to `CallExpr` — `ops/steps/03-infix-parse-sema.md` (dep: S02)
 - [ ] **S04** Diagnostics + nested-paren rule (D3) — `ops/steps/04-infix-diagnostics.md` (dep: S03)
@@ -68,3 +68,4 @@ ninja -C "$B" check-clang                     # full regression gate
 | Step | Agent date | Branch | Commit | Gate result | Handoff |
 |------|-----------|--------|--------|-------------|---------|
 | S00  | 2026-06-14 | backtick | tip of `backtick` (base a815e6f267c1) | PASS (5 env-only known-fails) | ops/handoffs/00-baseline.handoff.md |
+| S01  | 2026-06-14 | backtick | 6aec144f9244 | PASS (4 env-only known-fails, 52210 total, 46442 passed) | ops/handoffs/01-feature-flag.handoff.md |

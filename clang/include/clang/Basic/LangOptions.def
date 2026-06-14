@@ -533,6 +533,7 @@ LANGOPT(EnableLifetimeSafetyTUAnalysis, 1, 0, Benign, "Lifetime safety at transl
 
 LANGOPT(PreserveVec3Type, 1, 0, NotCompatible, "Preserve 3-component vector type")
 LANGOPT(Reflection      , 1, 0, NotCompatible, "C++26 Reflection")
+LANGOPT(Backtick        , 1, 0, NotCompatible, "backtick operator and identifier escaping")
 
 #undef LANGOPT
 #undef ENUM_LANGOPT
