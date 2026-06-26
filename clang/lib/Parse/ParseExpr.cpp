@@ -305,7 +305,7 @@ bool Parser::isNotExpressionStart() {
 
 bool Parser::isFoldOperator(prec::Level Level) const {
   return Level > prec::Unknown && Level != prec::Conditional &&
-         Level != prec::Spaceship;
+         Level != prec::Spaceship && Level != prec::Backtick;
 }
 
 bool Parser::isFoldOperator(tok::TokenKind Kind) const {
@@ -316,7 +316,8 @@ ExprResult
 Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
   prec::Level NextTokPrec = getBinOpPrecedence(Tok.getKind(),
                                                GreaterThanIsOperator,
-                                               getLangOpts().CPlusPlus11);
+                                               getLangOpts().CPlusPlus11,
+                                               BacktickIsOperator);
   SourceLocation ColonLoc;
 
   auto SavedType = PreferredType;
@@ -397,6 +398,8 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
 
     // Special case handling for the ternary operator.
     ExprResult TernaryMiddle(true);
+    ExprResult BacktickOp(true);
+    SourceLocation BacktickCloseLoc;
     if (NextTokPrec == prec::Conditional) {
       if (getLangOpts().CPlusPlus11 && Tok.is(tok::l_brace)) {
         // Parse a braced-init-list here for error recovery purposes.
@@ -459,6 +462,19 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
       }
     }
 
+    // Special case handling for the backtick infix operator: x `f` y -> f(x, y).
+    if (OpToken.is(tok::backtick)) {
+      // Parse the operator slot with BacktickIsOperator suppressed so the
+      // closing backtick terminates the slot rather than starting a new one.
+      BacktickIsOperatorScope BIS(BacktickIsOperator, false);
+      BacktickOp = ParseExpression();
+      if (BacktickOp.isInvalid())
+        LHS = ExprError();
+      BacktickCloseLoc = Tok.getLocation();
+      if (ExpectAndConsume(tok::backtick, diag::err_expected))
+        LHS = ExprError();
+    }
+
     PreferredType.enterBinary(Actions, Tok.getLocation(), LHS.get(),
                               OpToken.getKind());
     // Parse another leaf here for the RHS of the operator.
@@ -491,7 +507,8 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
     // operator immediately to the right of the RHS.
     prec::Level ThisPrec = NextTokPrec;
     NextTokPrec = getBinOpPrecedence(Tok.getKind(), GreaterThanIsOperator,
-                                     getLangOpts().CPlusPlus11);
+                                     getLangOpts().CPlusPlus11,
+                                     BacktickIsOperator);
 
     // Assignment and conditional expressions are right-associative.
     bool isRightAssoc = ThisPrec == prec::Conditional ||
@@ -520,7 +537,8 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
       }
 
       NextTokPrec = getBinOpPrecedence(Tok.getKind(), GreaterThanIsOperator,
-                                       getLangOpts().CPlusPlus11);
+                                       getLangOpts().CPlusPlus11,
+                                       BacktickIsOperator);
     }
 
     if (!RHS.isInvalid() && RHSIsInitList) {
@@ -546,6 +564,18 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
         LHS = Actions.CreateRecoveryExpr(LHS.get()->getBeginLoc(),
                                          PrevTokLocation,
                                          {LHS.get()});
+      } else if (OpToken.is(tok::backtick)) {
+        // Desugar x `f` y -> f(x, y).
+        Expr *Args[] = {LHS.get(), RHS.get()};
+        LHS = Actions.ActOnBacktickOperator(getCurScope(),
+                                            OpToken.getLocation(),
+                                            BacktickOp.get(),
+                                            BacktickCloseLoc,
+                                            LHS.get(), RHS.get());
+        if (LHS.isInvalid())
+          LHS = Actions.CreateRecoveryExpr(Args[0]->getBeginLoc(),
+                                           Args[1]->getEndLoc(),
+                                           Args);
       } else if (TernaryMiddle.isInvalid()) {
         // If we're using '>>' as an operator within a template
         // argument list (in C++98), suggest the addition of

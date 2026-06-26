@@ -7543,6 +7543,10 @@ public:
   void CheckStaticArrayArgument(SourceLocation CallLoc, ParmVarDecl *Param,
                                 const Expr *ArgExpr);
 
+  ExprResult ActOnBacktickOperator(Scope *S, SourceLocation OpenLoc, Expr *Op,
+                                   SourceLocation CloseLoc, Expr *LHS,
+                                   Expr *RHS);
+
   /// ActOnCallExpr - Handle a call to Fn with the specified array of arguments.
   /// This provides the location of the left/right parens and a list of comma
   /// locations.
