@@ -261,6 +261,9 @@ PUNCTUATOR(coloncolon,          "::")
 // Objective C support.
 PUNCTUATOR(at,                  "@")
 
+// Backtick operator / keyword-escape (gated behind -fbacktick).
+PUNCTUATOR(backtick,            "`")
+
 // CUDA support.
 PUNCTUATOR(lesslessless,          "<<<")
 PUNCTUATOR(greatergreatergreater, ">>>")
