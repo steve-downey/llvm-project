@@ -4529,6 +4529,10 @@ LexStart:
       Kind = tok::unknown;
     break;
 
+  case '`':
+    Kind = LangOpts.Backtick ? tok::backtick : tok::unknown;
+    break;
+
   // UCNs (C99 6.4.3, C++11 [lex.charset]p2)
   case '\\':
     if (!LangOpts.AsmPreprocessor) {
