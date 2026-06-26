@@ -70,4 +70,4 @@ ninja -C "$B" check-clang                     # full regression gate
 | S00  | 2026-06-14 | backtick | tip of `backtick` (base a815e6f267c1) | PASS (5 env-only known-fails) | ops/handoffs/00-baseline.handoff.md |
 | S01  | 2026-06-14 | backtick | 6aec144f9244 | PASS (4 env-only known-fails, 52210 total, 46442 passed) | ops/handoffs/01-feature-flag.handoff.md |
 | S02  | 2026-06-26 | backtick | 66bee2be5b15 | PASS (1 env-only known-fail, 52211 total, 46446 passed) | ops/handoffs/02-lexer-token.handoff.md |
-| S03  | 2026-06-26 | backtick | TBD | PASS (1 env-only known-fail, 52212 total, 46447 passed) | ops/handoffs/03-infix-parse-sema.handoff.md |
+| S03  | 2026-06-26 | backtick | ecceeff072ff | PASS (1 env-only known-fail, 52212 total, 46447 passed) | ops/handoffs/03-infix-parse-sema.handoff.md |
