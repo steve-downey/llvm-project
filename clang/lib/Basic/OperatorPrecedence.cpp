@@ -15,8 +15,10 @@
 namespace clang {
 
 prec::Level getBinOpPrecedence(tok::TokenKind Kind, bool GreaterThanIsOperator,
-                               bool CPlusPlus11) {
+                               bool CPlusPlus11, bool BacktickIsOperator) {
   switch (Kind) {
+  case tok::backtick:
+    return BacktickIsOperator ? prec::Backtick : prec::Unknown;
   case tok::greater:
     // C++ [temp.names]p3:
     //   [...] When parsing a template-argument-list, the first
