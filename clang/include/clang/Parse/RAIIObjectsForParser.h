@@ -344,6 +344,20 @@ namespace clang {
     }
   };
 
+  class BacktickIsOperatorScope {
+    bool &BacktickIsOperator;
+    bool OldBacktickIsOperator;
+  public:
+    BacktickIsOperatorScope(bool &BIO, bool Val)
+    : BacktickIsOperator(BIO), OldBacktickIsOperator(BIO) {
+      BacktickIsOperator = Val;
+    }
+
+    ~BacktickIsOperatorScope() {
+      BacktickIsOperator = OldBacktickIsOperator;
+    }
+  };
+
   class InMessageExpressionRAIIObject {
     bool &InMessageExpression;
     bool OldValue;

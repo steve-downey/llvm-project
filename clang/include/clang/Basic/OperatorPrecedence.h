@@ -39,13 +39,15 @@ namespace prec {
     Shift           = 12,   // <<, >>
     Additive        = 13,   // -, +
     Multiplicative  = 14,   // *, /, %
-    PointerToMember = 15    // .*, ->*
+    PointerToMember = 15,   // .*, ->*
+    Backtick        = 16    // x `f` y
   };
 }
 
 /// Return the precedence of the specified binary operator token.
 prec::Level getBinOpPrecedence(tok::TokenKind Kind, bool GreaterThanIsOperator,
-                               bool CPlusPlus11);
+                               bool CPlusPlus11,
+                               bool BacktickIsOperator = true);
 
 }  // end namespace clang
 

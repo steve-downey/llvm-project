@@ -6738,6 +6738,13 @@ static void DiagnosedUnqualifiedCallsToStdFunctions(Sema &S,
       << FixItHint::CreateInsertion(DRE->getLocation(), "std::");
 }
 
+ExprResult Sema::ActOnBacktickOperator(Scope *S, SourceLocation OpenLoc,
+                                       Expr *Op, SourceLocation CloseLoc,
+                                       Expr *LHS, Expr *RHS) {
+  Expr *Args[] = {LHS, RHS};
+  return BuildCallExpr(S, Op, OpenLoc, Args, CloseLoc);
+}
+
 ExprResult Sema::ActOnCallExpr(Scope *Scope, Expr *Fn, SourceLocation LParenLoc,
                                MultiExprArg ArgExprs, SourceLocation RParenLoc,
                                Expr *ExecConfig) {

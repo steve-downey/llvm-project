@@ -3839,6 +3839,7 @@ private:
   /// template argument list, where the '>' closes the template
   /// argument list.
   bool GreaterThanIsOperator;
+  bool BacktickIsOperator;
 
   // C++ type trait keywords that can be reverted to identifiers and still be
   // used as type traits.
