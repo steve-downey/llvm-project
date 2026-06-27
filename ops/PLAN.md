@@ -58,7 +58,7 @@ ninja -C "$B" check-clang                     # full regression gate
 
 ### Phase C — Tooling & source fidelity
 - [x] **S10** clang-format (both uses) — `ops/steps/10-clang-format.md` (dep: S09)
-- [ ] **S11** AST wrapper for `-ast-print` fidelity — `ops/steps/11-ast-wrapper.md` (dep: S06)
+- [x] **S11** AST wrapper for `-ast-print` fidelity — `ops/steps/11-ast-wrapper.md` (dep: S06)
 
 ### Phase D — Second implementation (GCC; full sub-plan in `ops/gcc/PLAN.md`)
 - [ ] **S12** GCC baseline & orientation — `ops/steps/12-gcc-bootstrap.md` (dep: A green)
@@ -78,3 +78,4 @@ ninja -C "$B" check-clang                     # full regression gate
 | S08  | 2026-06-27 | backtick | 96ceb59a4cce | PASS (1 env-only known-fail, 52218 total, 46453 passed) | ops/handoffs/08-escape-tentative.handoff.md |
 | S09  | 2026-06-27 | backtick | d84f91cbd5d4 | PASS (1 env-only known-fail, 52219 total, 46454 passed) | ops/handoffs/09-escape-tests.handoff.md |
 | S10  | 2026-06-27 | backtick | f185e099e046 | PASS (1 env-only known-fail, 52223 total, 46450 passed, FormatTests 1270 all pass) | ops/handoffs/10-clang-format.handoff.md |
+| S11  | 2026-06-27 | backtick | 4243342f5438 | PASS (1 env-only known-fail, 52224 total, 46459 passed) | ops/handoffs/11-ast-wrapper.handoff.md |
