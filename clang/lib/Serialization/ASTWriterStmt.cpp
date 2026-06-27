@@ -840,6 +840,12 @@ void ASTStmtWriter::VisitParenExpr(ParenExpr *E) {
   Code = serialization::EXPR_PAREN;
 }
 
+void ASTStmtWriter::VisitBacktickInfixExpr(BacktickInfixExpr *E) {
+  VisitExpr(E);
+  Record.AddStmt(E->getSubExpr());
+  Code = serialization::EXPR_BACKTICK_INFIX;
+}
+
 void ASTStmtWriter::VisitParenListExpr(ParenListExpr *E) {
   VisitExpr(E);
   Record.push_back(E->getNumExprs());

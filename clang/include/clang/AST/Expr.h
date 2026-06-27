@@ -2235,6 +2235,44 @@ public:
   }
 };
 
+/// BacktickInfixExpr - Wraps the desugared CallExpr produced by
+/// `lhs `op` rhs` infix syntax (-fbacktick). Transparent to semantics,
+/// codegen, and type analysis; the pretty-printer emits the backtick form.
+class BacktickInfixExpr : public Expr {
+  Stmt *Inner; // Always a CallExpr
+
+public:
+  BacktickInfixExpr(Expr *InnerCall)
+      : Expr(BacktickInfixExprClass, InnerCall->getType(),
+             InnerCall->getValueKind(), InnerCall->getObjectKind()),
+        Inner(InnerCall) {
+    setDependence(computeDependence(this));
+  }
+
+  explicit BacktickInfixExpr(EmptyShell Empty)
+      : Expr(BacktickInfixExprClass, Empty), Inner(nullptr) {}
+
+  Expr *getSubExpr() { return cast<Expr>(Inner); }
+  const Expr *getSubExpr() const { return cast<Expr>(Inner); }
+  void setSubExpr(Expr *E) { Inner = E; }
+
+  SourceLocation getBeginLoc() const LLVM_READONLY {
+    return Inner ? Inner->getBeginLoc() : SourceLocation();
+  }
+  SourceLocation getEndLoc() const LLVM_READONLY {
+    return Inner ? Inner->getEndLoc() : SourceLocation();
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == BacktickInfixExprClass;
+  }
+
+  child_range children() { return child_range(&Inner, &Inner + 1); }
+  const_child_range children() const {
+    return const_child_range(&Inner, &Inner + 1);
+  }
+};
+
 /// UnaryOperator - This represents the unary-expression's (except sizeof and
 /// alignof), the postinc/postdec operators from postfix-expression, and various
 /// extensions.
