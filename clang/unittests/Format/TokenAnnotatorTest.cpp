@@ -4559,6 +4559,50 @@ TEST_F(TokenAnnotatorTest, AttributeSquares) {
   EXPECT_TRUE(Tokens[15]->EndsCppAttributeGroup);
 }
 
+TEST_F(TokenAnnotatorTest, BacktickTokenTypes) {
+  // Infix use: a `f` b -> TT_BacktickInfixOpen, TT_BacktickInfixClose
+  auto Tokens = annotate("a `f` b;");
+  ASSERT_EQ(Tokens.size(), 7u) << Tokens;
+  EXPECT_TOKEN(Tokens[1], tok::backtick, TT_BacktickInfixOpen);
+  EXPECT_TOKEN(Tokens[3], tok::backtick, TT_BacktickInfixClose);
+  // Canonical spacing: spaces outside, hug inside.
+  EXPECT_EQ(Tokens[1]->SpacesRequiredBefore, 1u);
+  EXPECT_EQ(Tokens[2]->SpacesRequiredBefore, 0u);
+  EXPECT_EQ(Tokens[3]->SpacesRequiredBefore, 0u);
+  EXPECT_EQ(Tokens[4]->SpacesRequiredBefore, 1u);
+
+  // Escape use: `new`() -> TT_BacktickEscapeOpen, TT_BacktickEscapeClose
+  Tokens = annotate("void `new`();");
+  ASSERT_EQ(Tokens.size(), 8u) << Tokens;
+  EXPECT_TOKEN(Tokens[1], tok::backtick, TT_BacktickEscapeOpen);
+  EXPECT_TOKEN(Tokens[3], tok::backtick, TT_BacktickEscapeClose);
+  // No space inside escape pair.
+  EXPECT_EQ(Tokens[2]->SpacesRequiredBefore, 0u);
+  EXPECT_EQ(Tokens[3]->SpacesRequiredBefore, 0u);
+
+  // Chained infix: a `f` b `g` c — 11 tokens including EOF
+  Tokens = annotate("a `f` b `g` c;");
+  ASSERT_EQ(Tokens.size(), 11u) << Tokens;
+  EXPECT_TOKEN(Tokens[1], tok::backtick, TT_BacktickInfixOpen);
+  EXPECT_TOKEN(Tokens[3], tok::backtick, TT_BacktickInfixClose);
+  EXPECT_TOKEN(Tokens[5], tok::backtick, TT_BacktickInfixOpen);
+  EXPECT_TOKEN(Tokens[7], tok::backtick, TT_BacktickInfixClose);
+
+  // D8: CanBreakBefore = false immediately after open or before close.
+  Tokens = annotate("a `f` b;");
+  ASSERT_EQ(Tokens.size(), 7u) << Tokens;
+  // Token[2] = 'f' (immediately after open backtick): no break allowed
+  EXPECT_FALSE(Tokens[2]->CanBreakBefore);
+  // Token[3] = close backtick: no break allowed
+  EXPECT_FALSE(Tokens[3]->CanBreakBefore);
+
+  // Escape pair: same no-break constraint.
+  Tokens = annotate("void `new`();");
+  ASSERT_EQ(Tokens.size(), 8u) << Tokens;
+  EXPECT_FALSE(Tokens[2]->CanBreakBefore); // 'new' after open
+  EXPECT_FALSE(Tokens[3]->CanBreakBefore); // close backtick
+}
+
 } // namespace
 } // namespace format
 } // namespace clang
