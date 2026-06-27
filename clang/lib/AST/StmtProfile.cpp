@@ -1496,6 +1496,10 @@ void StmtProfiler::VisitParenExpr(const ParenExpr *S) {
   VisitExpr(S);
 }
 
+void StmtProfiler::VisitBacktickInfixExpr(const BacktickInfixExpr *S) {
+  VisitExpr(S);
+}
+
 void StmtProfiler::VisitParenListExpr(const ParenListExpr *S) {
   VisitExpr(S);
 }

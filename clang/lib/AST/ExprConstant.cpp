@@ -8491,6 +8491,8 @@ public:
 
   bool VisitParenExpr(const ParenExpr *E)
     { return StmtVisitorTy::Visit(E->getSubExpr()); }
+  bool VisitBacktickInfixExpr(const BacktickInfixExpr *E)
+    { return StmtVisitorTy::Visit(E->getSubExpr()); }
   bool VisitUnaryExtension(const UnaryOperator *E)
     { return StmtVisitorTy::Visit(E->getSubExpr()); }
   bool VisitUnaryPlus(const UnaryOperator *E)
@@ -21909,6 +21911,8 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
 
   case Expr::ParenExprClass:
     return CheckICE(cast<ParenExpr>(E)->getSubExpr(), Ctx);
+  case Expr::BacktickInfixExprClass:
+    return CheckICE(cast<BacktickInfixExpr>(E)->getSubExpr(), Ctx);
   case Expr::GenericSelectionExprClass:
     return CheckICE(cast<GenericSelectionExpr>(E)->getResultExpr(), Ctx);
   case Expr::IntegerLiteralClass:

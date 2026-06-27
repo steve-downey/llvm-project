@@ -6742,7 +6742,10 @@ ExprResult Sema::ActOnBacktickOperator(Scope *S, SourceLocation OpenLoc,
                                        Expr *Op, SourceLocation CloseLoc,
                                        Expr *LHS, Expr *RHS) {
   Expr *Args[] = {LHS, RHS};
-  return BuildCallExpr(S, Op, OpenLoc, Args, CloseLoc);
+  ExprResult Call = BuildCallExpr(S, Op, OpenLoc, Args, CloseLoc);
+  if (Call.isInvalid())
+    return Call;
+  return new (Context) BacktickInfixExpr(Call.get());
 }
 
 ExprResult Sema::ActOnCallExpr(Scope *Scope, Expr *Fn, SourceLocation LParenLoc,

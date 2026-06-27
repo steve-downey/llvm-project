@@ -150,6 +150,7 @@ public:
   bool VisitImaginaryLiteral(const ImaginaryLiteral *E);
   bool VisitFixedPointLiteral(const FixedPointLiteral *E);
   bool VisitParenExpr(const ParenExpr *E);
+  bool VisitBacktickInfixExpr(const BacktickInfixExpr *E);
   bool VisitBinaryOperator(const BinaryOperator *E);
   bool VisitLogicalBinOp(const BinaryOperator *E);
   bool VisitPointerArithBinOp(const BinaryOperator *E);
