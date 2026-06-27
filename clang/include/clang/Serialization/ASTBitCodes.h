@@ -1679,6 +1679,9 @@ enum StmtCode {
   /// A ParenExpr record.
   EXPR_PAREN,
 
+  /// A BacktickInfixExpr record.
+  EXPR_BACKTICK_INFIX,
+
   /// A ParenListExpr record.
   EXPR_PAREN_LIST,
 

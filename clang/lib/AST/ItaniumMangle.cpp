@@ -5836,6 +5836,10 @@ recurse:
     E = cast<ParenExpr>(E)->getSubExpr();
     goto recurse;
 
+  case Expr::BacktickInfixExprClass:
+    E = cast<BacktickInfixExpr>(E)->getSubExpr();
+    goto recurse;
+
   case Expr::ConceptSpecializationExprClass: {
     auto *CSE = cast<ConceptSpecializationExpr>(E);
     if (isCompatibleWith(LangOptions::ClangABI::Ver17)) {

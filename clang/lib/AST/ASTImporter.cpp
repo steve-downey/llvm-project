@@ -652,6 +652,7 @@ namespace clang {
     ExpectedStmt VisitAddrLabelExpr(AddrLabelExpr *E);
     ExpectedStmt VisitConstantExpr(ConstantExpr *E);
     ExpectedStmt VisitParenExpr(ParenExpr *E);
+    ExpectedStmt VisitBacktickInfixExpr(BacktickInfixExpr *E);
     ExpectedStmt VisitParenListExpr(ParenListExpr *E);
     ExpectedStmt VisitStmtExpr(StmtExpr *E);
     ExpectedStmt VisitUnaryOperator(UnaryOperator *E);
@@ -8065,6 +8066,13 @@ ExpectedStmt ASTNodeImporter::VisitParenExpr(ParenExpr *E) {
 
   return new (Importer.getToContext())
       ParenExpr(ToLParen, ToRParen, ToSubExpr);
+}
+
+ExpectedStmt ASTNodeImporter::VisitBacktickInfixExpr(BacktickInfixExpr *E) {
+  auto ToInnerOrErr = import(E->getSubExpr());
+  if (!ToInnerOrErr)
+    return ToInnerOrErr.takeError();
+  return new (Importer.getToContext()) BacktickInfixExpr(*ToInnerOrErr);
 }
 
 ExpectedStmt ASTNodeImporter::VisitParenListExpr(ParenListExpr *E) {

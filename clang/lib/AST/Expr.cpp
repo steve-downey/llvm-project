@@ -2686,6 +2686,9 @@ bool Expr::isUnusedResultAWarning(const Expr *&WarnE, SourceLocation &Loc,
   case ParenExprClass:
     return cast<ParenExpr>(this)->getSubExpr()->
       isUnusedResultAWarning(WarnE, Loc, R1, R2, Ctx);
+  case BacktickInfixExprClass:
+    return cast<BacktickInfixExpr>(this)->getSubExpr()->
+      isUnusedResultAWarning(WarnE, Loc, R1, R2, Ctx);
   case GenericSelectionExprClass:
     return cast<GenericSelectionExpr>(this)->getResultExpr()->
       isUnusedResultAWarning(WarnE, Loc, R1, R2, Ctx);
@@ -3527,6 +3530,9 @@ bool Expr::isConstantInitializer(ASTContext &Ctx, bool IsForRef,
   case ParenExprClass:
     return cast<ParenExpr>(this)->getSubExpr()
       ->isConstantInitializer(Ctx, IsForRef, Culprit);
+  case BacktickInfixExprClass:
+    return cast<BacktickInfixExpr>(this)->getSubExpr()
+      ->isConstantInitializer(Ctx, IsForRef, Culprit);
   case GenericSelectionExprClass:
     return cast<GenericSelectionExpr>(this)->getResultExpr()
       ->isConstantInitializer(Ctx, IsForRef, Culprit);
@@ -3853,6 +3859,7 @@ bool Expr::HasSideEffects(const ASTContext &Ctx,
     break;
 
   case ParenExprClass:
+  case BacktickInfixExprClass:
   case ArraySubscriptExprClass:
   case MatrixSingleSubscriptExprClass:
   case MatrixSubscriptExprClass:

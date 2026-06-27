@@ -1183,6 +1183,9 @@ public:
   const Expr *VisitParenExpr(const ParenExpr *E) {
     return Visit(E->getSubExpr());
   }
+  const Expr *VisitBacktickInfixExpr(const BacktickInfixExpr *E) {
+    return Visit(E->getSubExpr());
+  }
   const Expr *VisitUnaryAddrOf(const UnaryOperator *E) {
     return Visit(E->getSubExpr());
   }
@@ -1830,6 +1833,8 @@ LValue CodeGenFunction::EmitLValueHelper(const Expr *E,
   }
   case Expr::ParenExprClass:
     return EmitLValue(cast<ParenExpr>(E)->getSubExpr(), IsKnownNonNull);
+  case Expr::BacktickInfixExprClass:
+    return EmitLValue(cast<BacktickInfixExpr>(E)->getSubExpr(), IsKnownNonNull);
   case Expr::GenericSelectionExprClass:
     return EmitLValue(cast<GenericSelectionExpr>(E)->getResultExpr(),
                       IsKnownNonNull);
@@ -3310,6 +3315,11 @@ static void setObjCGCLValueClass(const ASTContext &Ctx, const Expr *E,
   }
 
   if (const auto *Exp = dyn_cast<UnaryOperator>(E)) {
+    setObjCGCLValueClass(Ctx, Exp->getSubExpr(), LV, IsMemberAccess);
+    return;
+  }
+
+  if (const auto *Exp = dyn_cast<BacktickInfixExpr>(E)) {
     setObjCGCLValueClass(Ctx, Exp->getSubExpr(), LV, IsMemberAccess);
     return;
   }
@@ -4991,6 +5001,9 @@ struct StructFieldAccess
     return Visit(E->getSubExpr());
   }
   const Expr *VisitParenExpr(const ParenExpr *E) {
+    return Visit(E->getSubExpr());
+  }
+  const Expr *VisitBacktickInfixExpr(const BacktickInfixExpr *E) {
     return Visit(E->getSubExpr());
   }
 };
