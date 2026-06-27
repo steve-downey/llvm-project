@@ -53,7 +53,7 @@ ninja -C "$B" check-clang                     # full regression gate
 
 ### Phase B — Clang keyword-escaped identifiers (after infix)
 - [x] **S07** Parser: keyword-escape, position-based — `ops/steps/07-escape-parse.md` (dep: S03)
-- [ ] **S08** Tentative-parse / decl-vs-expr integration — `ops/steps/08-escape-tentative.md` (dep: S07)
+- [x] **S08** Tentative-parse / decl-vs-expr integration — `ops/steps/08-escape-tentative.md` (dep: S07)
 - [ ] **S09** Escape test sweep + mangling check — `ops/steps/09-escape-tests.md` (dep: S08)
 
 ### Phase C — Tooling & source fidelity
@@ -75,3 +75,4 @@ ninja -C "$B" check-clang                     # full regression gate
 | S05  | 2026-06-26 | backtick | 08ea70ad08ed | PASS (1 env-only known-fail, 52214 total, 46449 passed) | ops/handoffs/05-infix-semantics-tests.handoff.md |
 | S06  | 2026-06-27 | backtick | 0cfa70dd367c | PASS (1 env-only known-fail, 52215 total, 46450 passed) | ops/handoffs/06-infix-precedence-tests.handoff.md |
 | S07  | 2026-06-27 | backtick | 0a9f8fc78fc2 | PASS (1 env-only known-fail, 52217 total, 46452 passed) | ops/handoffs/07-escape-parse.handoff.md |
+| S08  | 2026-06-27 | backtick | TBD | PASS (1 env-only known-fail, 52218 total, 46453 passed) | ops/handoffs/08-escape-tentative.handoff.md |
