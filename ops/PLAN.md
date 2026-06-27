@@ -73,4 +73,4 @@ ninja -C "$B" check-clang                     # full regression gate
 | S03  | 2026-06-26 | backtick | ecceeff072ff | PASS (1 env-only known-fail, 52212 total, 46447 passed) | ops/handoffs/03-infix-parse-sema.handoff.md |
 | S04  | 2026-06-26 | backtick | d9e633069702 | PASS (1 env-only known-fail, 52213 total, 46448 passed) | ops/handoffs/04-infix-diagnostics.handoff.md |
 | S05  | 2026-06-26 | backtick | 08ea70ad08ed | PASS (1 env-only known-fail, 52214 total, 46449 passed) | ops/handoffs/05-infix-semantics-tests.handoff.md |
-| S06  | 2026-06-27 | backtick | (pending) | PASS (1 env-only known-fail, 52215 total, 46450 passed) | ops/handoffs/06-infix-precedence-tests.handoff.md |
+| S06  | 2026-06-27 | backtick | 0cfa70dd367c | PASS (1 env-only known-fail, 52215 total, 46450 passed) | ops/handoffs/06-infix-precedence-tests.handoff.md |
