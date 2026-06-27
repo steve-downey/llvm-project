@@ -2908,5 +2908,16 @@ TEST_F(FormatTestJS, BreakAfterOpenBracket) {
                Style);
 }
 
+TEST_F(FormatTestJS, BacktickTemplateStringNonRegression) {
+  // JS template strings must continue to format correctly; C++ backtick
+  // operator changes must not affect JavaScript mode.
+  verifyFormat("var x = `hello ${name}`;");
+  verifyFormat("var x = `hello` == `hello`;");
+  verifyFormat("var x = tag`template`;");
+  verifyFormat("var x = `multi\n"
+               "  line`;",
+               "var x =\n    `multi\n  line`;");
+}
+
 } // namespace format
 } // end namespace clang
