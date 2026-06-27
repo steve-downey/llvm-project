@@ -1,7 +1,7 @@
 # Handoff — S08 Tentative-parse / decl-vs-expr integration
 
 - **Status:** DONE (gate passed)
-- **Branch / commit:** `backtick` @ TBD (update after commit)
+- **Branch / commit:** `backtick` @ `96ceb59a4cce`
 - **Date / agent:** 2026-06-27
 
 ## What changed
