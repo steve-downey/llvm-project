@@ -34,6 +34,10 @@ namespace format {
   TYPE(AttributeMacro)                                                         \
   TYPE(AttributeRParen)                                                        \
   TYPE(AttributeRSquare)                                                       \
+  TYPE(BacktickEscapeClose)                                                    \
+  TYPE(BacktickEscapeOpen)                                                     \
+  TYPE(BacktickInfixClose)                                                     \
+  TYPE(BacktickInfixOpen)                                                      \
   TYPE(BinaryOperator)                                                         \
   TYPE(BitFieldColon)                                                          \
   TYPE(BlockComment)                                                           \
