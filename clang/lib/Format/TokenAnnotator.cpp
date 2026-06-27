@@ -2414,6 +2414,33 @@ private:
       return;
     }
 
+    if (IsCpp && Current.is(tok::backtick)) {
+      if (PendingBacktickKind == TT_Unknown) {
+        // Open backtick: infix if post-operand, escape otherwise.
+        const FormatToken *Prev = Current.getPreviousNonComment();
+        bool PostOperand =
+            Prev && (Prev->Tok.isLiteral() ||
+                     Prev->isOneOf(tok::identifier, tok::r_paren, tok::r_square,
+                                   tok::r_brace, tok::kw_true, tok::kw_false,
+                                   tok::kw_nullptr, tok::kw_this,
+                                   TT_BacktickEscapeClose, TT_BacktickInfixClose));
+        if (PostOperand) {
+          Current.setType(TT_BacktickInfixOpen);
+          PendingBacktickKind = TT_BacktickInfixOpen;
+        } else {
+          Current.setType(TT_BacktickEscapeOpen);
+          PendingBacktickKind = TT_BacktickEscapeOpen;
+        }
+      } else {
+        // Close backtick.
+        Current.setType(PendingBacktickKind == TT_BacktickInfixOpen
+                            ? TT_BacktickInfixClose
+                            : TT_BacktickEscapeClose);
+        PendingBacktickKind = TT_Unknown;
+      }
+      return;
+    }
+
     if ((Style.isJavaScript() || Style.isCSharp()) &&
         Current.is(tok::exclaim)) {
       if (Current.Previous) {
@@ -3229,6 +3256,9 @@ private:
   FormatToken *CurrentToken;
   bool AutoFound;
   bool IsCpp;
+  // Tracks the type of the most recent unmatched open backtick in C++.
+  // TT_Unknown means we are not inside a backtick construct.
+  TokenType PendingBacktickKind = TT_Unknown;
   LangOptions LangOpts;
   const AdditionalKeywords &Keywords;
 
@@ -4727,6 +4757,16 @@ bool TokenAnnotator::spaceRequiredBeforeParens(const FormatToken &Right) const {
 bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
                                           const FormatToken &Left,
                                           const FormatToken &Right) const {
+  // Backtick infix/escape: canonical style is spaces outside, hug inside.
+  // e.g.  x `f` y   and   `new`(...)
+  if (Left.isOneOf(TT_BacktickInfixOpen, TT_BacktickEscapeOpen) ||
+      Right.isOneOf(TT_BacktickInfixClose, TT_BacktickEscapeClose))
+    return false; // no space after open or before close
+  if (Left.is(TT_BacktickInfixClose))
+    return true; // space after infix close (before next operand)
+  if (Right.is(TT_BacktickInfixOpen))
+    return true; // space before infix open (after left operand)
+
   if (Left.is(tok::kw_return) &&
       Right.isNoneOf(tok::semi, tok::r_paren, tok::hashhash)) {
     return true;
@@ -6339,6 +6379,11 @@ bool TokenAnnotator::mustBreakBefore(AnnotatedLine &Line,
 bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
                                     const FormatToken &Right) const {
   const FormatToken &Left = *Right.Previous;
+  // D8: hard-forbid breaks adjacent to backtick delimiters (after open, before
+  // close) for both infix and escape uses.
+  if (Left.isOneOf(TT_BacktickInfixOpen, TT_BacktickEscapeOpen) ||
+      Right.isOneOf(TT_BacktickInfixClose, TT_BacktickEscapeClose))
+    return false;
   // Language-specific stuff.
   if (Style.isCSharp()) {
     if (Left.isOneOf(TT_CSharpNamedArgumentColon, TT_AttributeColon) ||
