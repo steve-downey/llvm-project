@@ -526,6 +526,9 @@ public:
   Value *VisitParenExpr(ParenExpr *PE) {
     return Visit(PE->getSubExpr());
   }
+  Value *VisitBacktickInfixExpr(BacktickInfixExpr *E) {
+    return Visit(E->getSubExpr());
+  }
   Value *VisitSubstNonTypeTemplateParmExpr(SubstNonTypeTemplateParmExpr *E) {
     return Visit(E->getReplacement());
   }

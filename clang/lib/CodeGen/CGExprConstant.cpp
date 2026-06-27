@@ -1174,6 +1174,11 @@ public:
     return Visit(PE->getSubExpr(), T);
   }
 
+  llvm::Constant *VisitBacktickInfixExpr(const BacktickInfixExpr *E,
+                                         QualType T) {
+    return Visit(E->getSubExpr(), T);
+  }
+
   llvm::Constant *
   VisitSubstNonTypeTemplateParmExpr(const SubstNonTypeTemplateParmExpr *PE,
                                     QualType T) {
