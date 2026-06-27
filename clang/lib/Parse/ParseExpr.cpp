@@ -464,15 +464,32 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
 
     // Special case handling for the backtick infix operator: x `f` y -> f(x, y).
     if (OpToken.is(tok::backtick)) {
+      SourceLocation OpenLoc = OpToken.getLocation();
       // Parse the operator slot with BacktickIsOperator suppressed so the
       // closing backtick terminates the slot rather than starting a new one.
+      // BalancedDelimiterTracker restores BacktickIsOperator=true inside any
+      // nested parens/brackets, enabling parenthesised nesting (D3).
       BacktickIsOperatorScope BIS(BacktickIsOperator, false);
-      BacktickOp = ParseExpression();
-      if (BacktickOp.isInvalid())
+
+      if (Tok.is(tok::backtick)) {
+        // Empty slot: x `` y
+        Diag(Tok, diag::err_backtick_empty_slot);
         LHS = ExprError();
+      } else {
+        BacktickOp = ParseExpression();
+        if (BacktickOp.isInvalid())
+          LHS = ExprError();
+      }
+
       BacktickCloseLoc = Tok.getLocation();
-      if (ExpectAndConsume(tok::backtick, diag::err_expected))
+      if (Tok.is(tok::backtick)) {
+        ConsumeToken(); // consume the closing backtick
+      } else if (!LHS.isInvalid()) {
+        // Slot parsed OK but no closing backtick found.
+        Diag(Tok, diag::err_backtick_unterminated);
+        Diag(OpenLoc, diag::note_matching) << tok::backtick;
         LHS = ExprError();
+      }
     }
 
     PreferredType.enterBinary(Actions, Tok.getLocation(), LHS.get(),
