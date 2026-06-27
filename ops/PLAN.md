@@ -49,7 +49,7 @@ ninja -C "$B" check-clang                     # full regression gate
 - [x] **S03** Parse + desugar to `CallExpr` — `ops/steps/03-infix-parse-sema.md` (dep: S02)
 - [x] **S04** Diagnostics + nested-paren rule (D3) — `ops/steps/04-infix-diagnostics.md` (dep: S03)
 - [x] **S05** Semantics test sweep — `ops/steps/05-infix-semantics-tests.md` (dep: S03)
-- [ ] **S06** Precedence/associativity test sweep — `ops/steps/06-infix-precedence-tests.md` (dep: S03)
+- [x] **S06** Precedence/associativity test sweep — `ops/steps/06-infix-precedence-tests.md` (dep: S03)
 
 ### Phase B — Clang keyword-escaped identifiers (after infix)
 - [ ] **S07** Parser: keyword-escape, position-based — `ops/steps/07-escape-parse.md` (dep: S03)
@@ -73,3 +73,4 @@ ninja -C "$B" check-clang                     # full regression gate
 | S03  | 2026-06-26 | backtick | ecceeff072ff | PASS (1 env-only known-fail, 52212 total, 46447 passed) | ops/handoffs/03-infix-parse-sema.handoff.md |
 | S04  | 2026-06-26 | backtick | d9e633069702 | PASS (1 env-only known-fail, 52213 total, 46448 passed) | ops/handoffs/04-infix-diagnostics.handoff.md |
 | S05  | 2026-06-26 | backtick | 08ea70ad08ed | PASS (1 env-only known-fail, 52214 total, 46449 passed) | ops/handoffs/05-infix-semantics-tests.handoff.md |
+| S06  | 2026-06-27 | backtick | (pending) | PASS (1 env-only known-fail, 52215 total, 46450 passed) | ops/handoffs/06-infix-precedence-tests.handoff.md |
