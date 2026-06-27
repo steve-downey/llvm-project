@@ -1629,6 +1629,15 @@ void StmtPrinter::VisitParenExpr(ParenExpr *Node) {
   OS << ")";
 }
 
+void StmtPrinter::VisitBacktickInfixExpr(BacktickInfixExpr *Node) {
+  auto *CE = cast<CallExpr>(Node->getSubExpr());
+  PrintExpr(CE->getArg(0));
+  OS << " `";
+  PrintExpr(CE->getCallee());
+  OS << "` ";
+  PrintExpr(CE->getArg(1));
+}
+
 void StmtPrinter::VisitUnaryOperator(UnaryOperator *Node) {
   if (!Node->isPostfix()) {
     OS << UnaryOperator::getOpcodeStr(Node->getOpcode());

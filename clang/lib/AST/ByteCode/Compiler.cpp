@@ -1291,6 +1291,11 @@ bool Compiler<Emitter>::VisitParenExpr(const ParenExpr *E) {
 }
 
 template <class Emitter>
+bool Compiler<Emitter>::VisitBacktickInfixExpr(const BacktickInfixExpr *E) {
+  return this->delegate(E->getSubExpr());
+}
+
+template <class Emitter>
 bool Compiler<Emitter>::VisitBinaryOperator(const BinaryOperator *E) {
   // Need short-circuiting for these.
   if (E->isLogicalOp() && !E->getType()->isVectorType())

@@ -17,6 +17,7 @@ int basic = 1 `add` 2;
 // AST: CallExpr {{.*}} 'int'
 // AST-NEXT: ImplicitCastExpr
 // AST-NEXT: DeclRefExpr {{.*}} 'mul'
+// AST-NEXT: BacktickInfixExpr {{.*}} 'int'
 // AST-NEXT: CallExpr {{.*}} 'int'
 // AST-NEXT: ImplicitCastExpr
 // AST-NEXT: DeclRefExpr {{.*}} 'sub'
