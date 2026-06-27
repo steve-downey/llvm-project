@@ -900,9 +900,11 @@ Parser::TPResult Parser::TryParseDeclarator(bool mayBeAbstract,
 
   if ((Tok.isOneOf(tok::identifier, tok::kw_operator) ||
        (Tok.is(tok::annot_cxxscope) && (NextToken().is(tok::identifier) ||
-                                        NextToken().is(tok::kw_operator)))) &&
+                                        NextToken().is(tok::kw_operator))) ||
+       (getLangOpts().Backtick && Tok.is(tok::backtick))) &&
       mayHaveIdentifier) {
     // declarator-id
+    bool IsBacktickEscape = false;
     if (Tok.is(tok::annot_cxxscope)) {
       CXXScopeSpec SS;
       Actions.RestoreNestedNameSpecifierAnnotation(
@@ -912,12 +914,22 @@ Parser::TPResult Parser::TryParseDeclarator(bool mayBeAbstract,
       ConsumeAnnotationToken();
     } else if (Tok.is(tok::identifier)) {
       TentativelyDeclaredIdentifiers.push_back(Tok.getIdentifierInfo());
+    } else if (getLangOpts().Backtick && Tok.is(tok::backtick)) {
+      IsBacktickEscape = true;
+      ConsumeToken(); // opening backtick
+      if (Tok.getIdentifierInfo())
+        TentativelyDeclaredIdentifiers.push_back(Tok.getIdentifierInfo());
+      ConsumeToken(); // keyword
+      if (Tok.is(tok::backtick))
+        ConsumeToken(); // closing backtick
     }
-    if (Tok.is(tok::kw_operator)) {
-      if (TryParseOperatorId() == TPResult::Error)
-        return TPResult::Error;
-    } else
-      ConsumeToken();
+    if (!IsBacktickEscape) {
+      if (Tok.is(tok::kw_operator)) {
+        if (TryParseOperatorId() == TPResult::Error)
+          return TPResult::Error;
+      } else
+        ConsumeToken();
+    }
   } else if (Tok.is(tok::l_paren)) {
     ConsumeParen();
     if (mayBeAbstract &&
