@@ -13571,6 +13571,17 @@ TreeTransform<Derived>::TransformParenExpr(ParenExpr *E) {
                                        E->getRParen());
 }
 
+template <typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformBacktickInfixExpr(BacktickInfixExpr *E) {
+  ExprResult Inner = getDerived().TransformExpr(E->getSubExpr());
+  if (Inner.isInvalid())
+    return ExprError();
+  if (!getDerived().AlwaysRebuild() && Inner.get() == E->getSubExpr())
+    return E;
+  return new (getDerived().getSema().Context) BacktickInfixExpr(Inner.get());
+}
+
 /// The operand of a unary address-of operator has special rules: it's
 /// allowed to refer to a non-static member of a class even if there's no 'this'
 /// object available.
