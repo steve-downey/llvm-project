@@ -48,7 +48,7 @@ ninja -C "$B" check-clang                     # full regression gate
 - [x] **S02** Lexer: backtick punctuator token — `ops/steps/02-lexer-token.md` (dep: S01)
 - [x] **S03** Parse + desugar to `CallExpr` — `ops/steps/03-infix-parse-sema.md` (dep: S02)
 - [x] **S04** Diagnostics + nested-paren rule (D3) — `ops/steps/04-infix-diagnostics.md` (dep: S03)
-- [ ] **S05** Semantics test sweep — `ops/steps/05-infix-semantics-tests.md` (dep: S03)
+- [x] **S05** Semantics test sweep — `ops/steps/05-infix-semantics-tests.md` (dep: S03)
 - [ ] **S06** Precedence/associativity test sweep — `ops/steps/06-infix-precedence-tests.md` (dep: S03)
 
 ### Phase B — Clang keyword-escaped identifiers (after infix)
@@ -72,3 +72,4 @@ ninja -C "$B" check-clang                     # full regression gate
 | S02  | 2026-06-26 | backtick | 66bee2be5b15 | PASS (1 env-only known-fail, 52211 total, 46446 passed) | ops/handoffs/02-lexer-token.handoff.md |
 | S03  | 2026-06-26 | backtick | ecceeff072ff | PASS (1 env-only known-fail, 52212 total, 46447 passed) | ops/handoffs/03-infix-parse-sema.handoff.md |
 | S04  | 2026-06-26 | backtick | d9e633069702 | PASS (1 env-only known-fail, 52213 total, 46448 passed) | ops/handoffs/04-infix-diagnostics.handoff.md |
+| S05  | 2026-06-26 | backtick | 08ea70ad08ed | PASS (1 env-only known-fail, 52214 total, 46449 passed) | ops/handoffs/05-infix-semantics-tests.handoff.md |
