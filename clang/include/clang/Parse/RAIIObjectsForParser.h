@@ -431,7 +431,8 @@ namespace clang {
 
   /// RAII class that helps handle the parsing of an open/close delimiter
   /// pair, such as braces { ... } or parentheses ( ... ).
-  class BalancedDelimiterTracker : public GreaterThanIsOperatorScope {
+  class BalancedDelimiterTracker : public GreaterThanIsOperatorScope,
+                                   public BacktickIsOperatorScope {
     Parser& P;
     tok::TokenKind Kind, Close, FinalToken;
     SourceLocation (Parser::*Consumer)();
@@ -453,6 +454,7 @@ namespace clang {
     BalancedDelimiterTracker(Parser& p, tok::TokenKind k,
                              tok::TokenKind FinalToken = tok::semi)
       : GreaterThanIsOperatorScope(p.GreaterThanIsOperator, true),
+        BacktickIsOperatorScope(p.BacktickIsOperator, true),
         P(p), Kind(k), FinalToken(FinalToken)
     {
       switch (Kind) {
