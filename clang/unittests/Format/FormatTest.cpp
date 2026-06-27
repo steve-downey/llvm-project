@@ -26579,6 +26579,55 @@ TEST_F(FormatTest, LambdaArrowAsTrailingReturnArrow) {
   verifyNoCrash("void foo()([] consteval -> int {}())");
 }
 
+TEST_F(FormatTest, BacktickOperatorFormatting) {
+  // Canonical style: spaces outside the pair, hug inside.
+  verifyFormat("int x = a `f` b;");
+  verifyFormat("int x = a `f` b;", "int x=a`f`b;");
+  verifyFormat("int x = a `f` b;", "int x = a   `f`   b;");
+
+  // Qualified operator slot.
+  verifyFormat("int x = a `std::min` b;");
+  verifyFormat("int x = a `std::min` b;", "int x=a`std::min`b;");
+
+  // Chained infix (left-associative).
+  verifyFormat("int x = a `f` b `g` c;");
+  verifyFormat("int x = a `f` b `g` c;", "int x=a`f`b`g`c;");
+
+  // Keyword-escape use in declarator-id: no space inserted inside pair.
+  verifyFormat("void `new`();");
+  verifyFormat("void `new`();", "void`new`();");
+
+  // Keyword-escape after member access: no space inside pair.
+  verifyFormat("auto r = obj.`delete`();");
+  verifyFormat("auto r = obj.`delete`();", "auto r=obj.`delete`();");
+
+  // Keyword-escape after arrow.
+  verifyFormat("auto r = ptr->`delete`();");
+
+  // Keyword-escape with namespace qualifier.
+  verifyFormat("auto r = obj.`new`(1, 2);", "auto r=obj.`new`(1,2);");
+
+  // D8: when forced to wrap, the break occurs outside the backtick pair —
+  // after the close backtick — never immediately inside the delimiters.
+  auto Style = getLLVMStyleWithColumns(14);
+  // "x = a `f` b;" is 14 chars — exactly fits.
+  verifyFormat("x = a `f` b;", Style);
+  // With a shorter limit the formatter must break; it wraps after the close
+  // backtick (the only valid word boundary in the expression).
+  Style = getLLVMStyleWithColumns(10);
+  verifyFormat("x = a `f`\n"
+               "    b;",
+               "x = a `f` b;", Style);
+}
+
+TEST_F(FormatTest, BacktickOperatorJSNonRegression) {
+  // JS template strings must not be affected by C++ backtick formatting.
+  // (JS is tested fully in FormatTestJS; this is a smoke test from FormatTest.)
+  auto Style = getLLVMStyle(FormatStyle::LK_Cpp);
+  // In C++, backtick is an infix operator, not a template string.
+  verifyFormat("int x = a `f` b;", Style);
+}
+
 } // namespace
 } // namespace test
 } // namespace format
