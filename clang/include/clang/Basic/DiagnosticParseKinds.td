@@ -212,6 +212,12 @@ def err_backtick_nested_requires_parens : Error<
     "nested backtick infix operator in operator slot must be parenthesised"
     " (e.g., 'x `(f `g` h)` y')">;
 
+// Backtick keyword-escape diagnostics (-fbacktick).
+def err_backtick_escape_not_keyword : Error<
+    "backtick keyword-escape requires a C++ keyword">;
+def err_backtick_escape_unterminated : Error<
+    "missing closing backtick for keyword escape">;
+
 def ext_gnu_array_range : Extension<"use of GNU array range extension">,
   InGroup<GNUDesignator>;
 def ext_gnu_missing_equal_designator : ExtWarn<

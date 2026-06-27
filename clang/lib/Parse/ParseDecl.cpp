@@ -6770,7 +6770,8 @@ void Parser::ParseDirectDeclarator(Declarator &D) {
     }
 
     if (Tok.isOneOf(tok::identifier, tok::kw_operator, tok::annot_template_id,
-                    tok::tilde)) {
+                    tok::tilde) ||
+        (getLangOpts().Backtick && Tok.is(tok::backtick))) {
       // We found something that indicates the start of an unqualified-id.
       // Parse that unqualified-id.
       bool AllowConstructorName;
