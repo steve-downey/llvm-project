@@ -24,7 +24,7 @@ build (`--disable-bootstrap --enable-languages=c,c++`), and the `g++.dg` gate
 ## Checklist
 ### GCC infix operator (mirrors Clang Phase A)
 - [x] **G01** Flag in `c.opt` — `ops/gcc/steps/G01-flag.md` (dep: S12)
-- [ ] **G02** libcpp `CPP_BACKTICK` token — `ops/gcc/steps/G02-token.md` (dep: G01)
+- [x] **G02** libcpp `CPP_BACKTICK` token — `ops/gcc/steps/G02-token.md` (dep: G01)
 - [ ] **G03** Infix parse + desugar (`finish_call_expr`) — `ops/gcc/steps/G03-infix.md` (dep: G02)
 - [ ] **G04** Diagnostics + nested-paren rule — `ops/gcc/steps/G04-diagnostics.md` (dep: G03)
 - [ ] **G05** Semantics tests — `ops/gcc/steps/G05-semantics-tests.md` (dep: G03)
@@ -41,3 +41,4 @@ the GCC track; desugar-only is sufficient for the paper's second data point.)
 | Step | Date | Branch | Commit | Gate | Handoff |
 |------|------|--------|--------|------|---------|
 | G01  | 2026-06-27 | backtick | e1575e693087 (gcc-backtick) | PASS — cc1plus -fbacktick/-fno-backtick accept; --help shows option; 105 parse tests 0 fail | ops/gcc/handoffs/G01-flag.handoff.md |
+| G02  | 2026-06-28 | backtick | 6ef769884d5 (gcc-backtick) | PASS — 15 lex tests pass (stray error w/o flag; CPP_BACKTICK token w/ flag; 105 parse tests 0 fail) | ops/gcc/handoffs/G02-token.handoff.md |
