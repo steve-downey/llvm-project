@@ -28,7 +28,7 @@ build (`--disable-bootstrap --enable-languages=c,c++`), and the `g++.dg` gate
 - [x] **G03** Infix parse + desugar (`finish_call_expr`) — `ops/gcc/steps/G03-infix.md` (dep: G02)
 - [x] **G04** Diagnostics + nested-paren rule — `ops/gcc/steps/G04-diagnostics.md` (dep: G03)
 - [x] **G05** Semantics tests — `ops/gcc/steps/G05-semantics-tests.md` (dep: G03)
-- [ ] **G06** Precedence/associativity tests — `ops/gcc/steps/G06-precedence-tests.md` (dep: G03)
+- [x] **G06** Precedence/associativity tests — `ops/gcc/steps/G06-precedence-tests.md` (dep: G03)
 ### GCC keyword-escaped identifiers (mirrors Clang Phase B)
 - [ ] **G07** Keyword-escape, position-based — `ops/gcc/steps/G07-escape.md` (dep: G03)
 - [ ] **G08** Tentative-parse / decl-vs-expr — `ops/gcc/steps/G08-escape-tentative.md` (dep: G07)
@@ -45,3 +45,4 @@ the GCC track; desugar-only is sufficient for the paper's second data point.)
 | G03  | 2026-06-28 | backtick | 852f6e1ad54 (gcc-backtick) | PASS — 36 backtick tests pass (infix-basic, infix-dump, lex-stray, lex-token; 105 parse tests 0 fail) | ops/gcc/handoffs/G03-infix.handoff.md |
 | G04  | 2026-06-28 | backtick | a05a770b1bf (gcc-backtick) | PASS — 45 backtick tests pass (+9 from infix-diag.C; 105 parse tests 0 fail) | ops/gcc/handoffs/G04-diagnostics.handoff.md |
 | G05  | 2026-06-28 | backtick | 2961fe511bf (gcc-backtick) | PASS — 49 backtick tests pass (+4 from infix-semantics.C; 105 parse tests 0 fail) | ops/gcc/handoffs/G05-semantics-tests.handoff.md |
+| G06  | 2026-06-28 | backtick | abacf28ecda (gcc-backtick) | PASS — 64 backtick tests pass (+15 from infix-precedence.C; 105 parse tests 0 fail) | ops/gcc/handoffs/G06-precedence-tests.handoff.md |
