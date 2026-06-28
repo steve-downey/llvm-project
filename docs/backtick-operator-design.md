@@ -44,9 +44,9 @@ a `f` b `g` c           // g(f(a, b), c)        // left-associative
 |----|----------|--------|-----------|
 | D1 | Left-associative | **Resolved** | `(x `op` y) `op` z`; matches reading order; fewest surprises for chaining. |
 | D2 | Precedence vs. unary prefix | **Resolved — Option A (§4)** | Highest-precedence *binary* operator (looser than unary). `-x `f` -y` -> `f(-x, -y)` is symmetric, consistent with every other binary operator, and the most teachable; an implementor concurred. The rejected alternative (tighter than unary) made backtick the only operator floating a leading prefix out of its operand. |
-| D3 | Nested backticks require parentheses | Proposed | Open and close are the same character, so bare nesting is ambiguous; `x `(f `g` h)` y` is well-formed, `x `f `g` h` y` is not. |
-| D4 | Operator slot = assignment-expression | Proposed | Excludes a top-level comma operator in the operator slot; operands and the operator slot all read as call arguments would. |
-| D5 | Gated behind a language flag | Proposed | Non-standard during proposal; keeps existing valid programs unchanged and makes the feature opt-in. |
+| D3 | Nesting requires parentheses; the bare form is a chain | **Resolved — reframed (§17.1)** | The slot's open/close are the same token, so the first interior backtick closes it: the slot can never hold a bare backtick, and "bare nesting" is *token-identical* to a D1 left-assoc chain (`x `f `g` h` y` == `h(f(x,g),y)`). It therefore cannot be diagnosed without contradicting D1. To nest, parenthesize — `x `(f `g` h)` y` == `(g(f,h))(x,y)`; without parens you get a chain — ordinary operator grouping, the same answer-changing-but-undiagnosed regroup as non-associative binary minus (`a-b-c` ≠ `a-(b-c)`). The original "produces a parse error" wording was impossible; this reclassifies DEV-04 / DEV-G04 from deferred-enforcement to no-enforcement-needed. |
+| D4 | Operator slot = assignment-expression | **Resolved** | Excludes a top-level comma operator in the operator slot; operands and the operator slot all read as call arguments would. |
+| D5 | Gated behind a language flag | **Resolved** | Non-standard during proposal; keeps existing valid programs unchanged and makes the feature opt-in. (A standardized form drops the gate; the flag is the prototype vehicle.) |
 | D6 | Desugar to a call expression for the MVP | **Resolved** | Inherits overload resolution / ADL / templates / constexpr / codegen with no new node. Enough for a working, testable compiler. |
 | D7 | Source-fidelity AST wrapper deferred to phase 2 | **Resolved** | A thin transparent node (delegating type / value category / constexpr / codegen / instantiation to the wrapped call) is purely additive and lands after the MVP, once people are kicking the tires. Enables `-ast-print` to round-trip backtick syntax. Does not affect clang-format (token-based) or the GCC front end. |
 | D8 | clang-format break policy | **Resolved** | Hard-forbid breaks adjacent to the backticks (after open, before close); allow breaks inside the operator slot but mildly disfavor them with a small split-penalty bump — slightly stickier than a normal expression, not a no-break zone. |
@@ -56,6 +56,8 @@ a `f` b `g` c           // g(f(a, b), c)        // left-associative
 | D12 | Orthogonal to P2011 `\|>` (pipeline-rewrite, "pizza"); does not replace it | **Resolved** | Both bottom out in a call and the 2-arg case overlaps, but backtick is *symmetric binary infix* desugaring to an ordinary overload-resolved call, while `\|>` is a *non-overloadable syntactic rewrite* prepending the left operand to an arbitrary-arity call. Different shape, arity, precedence, mechanism, and idiom; they compose rather than compete. Backtick also deliberately declines the `\|>` spelling (§13.3 / §14.3) so both can coexist in one program. Full analysis in §15. |
 | D13 | Scope: pure core-language proposal; no standard-library additions | **Resolved** | Standardizing pipeline/composition helpers (`pipe`, `then`, `mbind`, …) would route the paper through LEWG as well as EWG/CWG — two tracks, the time-and-motion cost of D11 rebuttal 7 doubled. The operator needs no library to function; the §16 helpers are each a few lines of ordinary user code. Keep this paper language-only (EWG/CWG), target C++29, and defer any standard helpers to a companion library paper once usage experience shows which earn it. §16 carries them as *motivation*, not proposal. |
 | D14 | Both backtick usages (infix operator + keyword-escape) proposed jointly, in one paper | **Resolved** | Same lexical token (D10), same committee (EWG/CWG). Joint proposal *conserves EWG attention* — one "what does backtick mean" discussion, not two — and prevents the two uses being designed into *contradiction* if pursued independently (punctuator vs. lexer-synthesized identifier; divergent disambiguation). Consistent with D13, not contrary to it: the rule is **bundle what shares a design surface within one committee; split what is separable across committees** — so the two language uses bundle, the library layer (D13) splits off to LEWG. Resolves the §10 scope question. |
+| D15 | Evaluation order is the call's; operand order unspecified | **Resolved (§17.2)** | `x `f` y` is defined as `f(x, y)` and adds *no* evaluation-order rule: operand order is **unspecified** (the same [expr.call] situation that defeated past LTR/RTL proposals), and since C++17 the callee/slot is sequenced *before* both operands. Source order `(x, slot, y)` is therefore not the evaluation order `(slot, then {x, y})`. Falls out of "it is just the call." |
+| D16 | A type-name in the slot yields construction | **Resolved (§17.3)** | The slot is any callable expression and a type-name is callable, so `x `T` y` == `T(x, y)` (functional-style construction; CTAD applies). Always an *expression* (slot is an assignment-expression, D4; result is an expression by construction), so no most-vexing-parse declaration reading can arise, and no collision with the §12 escape (different grammatical position). Blessed as a consequence, not a special rule. |
 
 Backtick is available because it has no current meaning in C++ source
 outside string/character literals and raw-string delimiters, all of which
@@ -847,3 +849,123 @@ deliberate and load-bearing for process:
 So §16 is a worked illustration of reach, explicitly out of scope for
 standardization, with a companion library paper named as the future home for
 anything that earns it.
+
+---
+
+## 17. Further semantic clarifications (D3 reframed, D15, D16, ADL)
+
+Resolutions reached after implementation, sharpening four points the original
+decisions log under-specified.
+
+### 17.1 Nesting vs. chaining — the D3 grouping rule
+
+The operator slot's open and close delimiters are the same token, so the first
+interior backtick always closes the slot. Two consequences: the slot can never
+contain a *bare* backtick, and what looks like "bare nesting" is
+token-identical to an ordinary left-associative chain.
+
+```
+a ` f ` b ` g ` c     (D1 chain, blessed)   -->  g(f(a, b), c)
+x ` f ` g ` h ` y     ("bare nesting")      -->  h(f(x, g), y)
+```
+
+Same shape, different names. Therefore:
+
+- "Bare nesting" is not a distinct construct and **cannot be diagnosed** — it
+  is exactly the chain D1 already defines and blesses. A diagnostic would have
+  to fire on legal D1 chaining, a contradiction.
+- The original D3 wording ("bare nesting naturally produces a parse error") was
+  not just wrong but impossible; the parser is correct to accept it, and Clang
+  and GCC agree (DEV-04 / DEV-G04, reclassified from "deferred enforcement" to
+  "no enforcement needed").
+
+**Rule (D3, reframed):** to nest a backtick expression in the operator slot,
+parenthesize it — `x `(f `g` h)` y` == `(g(f, h))(x, y)`. Without parentheses
+you get a left-associative chain (D1). The syntax is new, but the problem class
+is old and well-understood: it is the **binary-minus situation**. Subtraction
+is *non-associative*, so `a - b - c` == `(a - b) - c` ≠ `a - (b - c)` — the
+default left grouping silently changes the result, and the language has never
+diagnosed it. Parentheses override the grouping; they do not avoid an error.
+(The same `-` is also the precedent for D10's position-based disambiguation:
+`-` is unary in operand position, binary in post-operand position, exactly as
+backtick is escape vs. infix.)
+
+**The silent-surprise case, and why it is left undiagnosed.** Because the
+greedy chain is always *syntactically* valid, whether it also *type-checks*
+depends on the callables. Almost always the chain fails to type-check when a
+user actually meant to nest, yielding a (misleading) error rather than a wrong
+answer. A fully silent miscompile is possible only with a pathological type
+that is simultaneously callable, value-convertible, and non-symmetric:
+
+```cpp
+struct Op {
+    int v;
+    Op operator()(Op a, Op b) const { return Op{a.v*2 + b.v + v}; } // non-symmetric
+    operator int() const { return v; }
+};
+Op f{1}, g{2}, h{3}, x{10}, y{20};
+
+int bare     = x `f `g` h` y;       // greedy chain : h(f(x,g), y)  == 69
+int intended = x `(f `g` h)` y;     // nested       : (g(f,h))(x,y) == 47
+```
+
+Both compile and differ (69 vs. 47) — the very same answer-changing-on-regroup
+that `a - b - c` ≠ `a - (b - c)` already exhibits for binary minus, which no
+compiler diagnoses. So this is not even a new category of hazard. It falls
+squarely under the **Murphy / Machiavelli rule**: the language defends against
+Murphy (honest mistakes), not Machiavelli (deliberate self-sabotage). Building `Op` to be
+callable *and* a value *and* asymmetric, then omitting the parentheses, is
+self-inflicted; the fix is one pair of parentheses. It does not justify a
+normative diagnostic — least of all one that cannot distinguish itself from
+blessed D1 chaining.
+
+*Possible QoI follow-up (non-normative).* It may still be worth investigating a
+*heuristic* Clang warning — e.g. when a chain's intermediate operand is itself
+a callable used in operand position, suggest parentheses. That would be opt-in,
+off-by-default diagnostic quality-of-implementation, never a language rule, and
+must not fire on ordinary chaining. Flagged for investigation, not committed.
+
+### 17.2 Evaluation order (D15)
+
+`x `f` y` is defined as the call `f(x, y)`, so it introduces **no new
+evaluation-order rule** and inherits [expr.call] wholesale:
+
+- operand evaluation order is **unspecified** (indeterminately sequenced) — the
+  same long-standing situation that defeated past attempts to mandate LTR/RTL
+  for call arguments;
+- since C++17 the callee is sequenced *before* the arguments, so the **slot is
+  evaluated before both operands**, even though it is written *between* them.
+  Source order `(x, slot, y)` is therefore not the evaluation order
+  `(slot, then {x, y})`.
+
+A feature of "it is just `f(x, y)`," not a special case: anyone who knows call
+semantics already knows backtick's.
+
+### 17.3 Type-name in the operator slot (D16)
+
+The slot is any callable expression, and a type-name is callable, so a type in
+the slot is well-formed and yields construction:
+
+```cpp
+x `T` y          // == T(x, y) : a prvalue T, functional-style construction
+a `std::pair` b  // == std::pair(a, b), with CTAD
+```
+
+It is always an **expression** (the slot is parsed as an assignment-expression,
+D4; backtick's result is an expression by construction), so it can never appear
+in declaration position — the most-vexing-parse declaration reading cannot
+arise. The keyword-escape use of backtick (§12) occupies operand/declarator
+position, not the post-operand infix position, so there is no collision.
+Blessed as a consistent, useful consequence rather than a special rule.
+
+### 17.4 ADL is normative (cross-compiler note)
+
+`x `f` y` performs argument-dependent lookup on the slot exactly as the call
+`f(x, y)` would (D6). This is **normative**: backtick must not silently have
+weaker lookup than the call it desugars to. Implementation status, for the
+implementation-experience section: Clang delivers full ADL (the slot reaches
+`BuildCallExpr` as an `UnresolvedLookupExpr`); GCC currently resolves the slot
+name at parse time, so pure-ADL and ADL-augmentation fail (DEV-G05). That is a
+**defect to correct** in the in-progress GCC track — carry the slot as an
+unresolved/dependent name into `finish_call_expr` — not a permitted
+cross-compiler difference.
