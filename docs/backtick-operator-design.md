@@ -54,6 +54,8 @@ a `f` b `g` c           // g(f(a, b), c)        // left-associative
 | D10 | Coexists with a backtick keyword-escape | **Resolved (mechanism); scope open (§10)** | Backtick stays one punctuator (no lexer identifier synthesis); the parser disambiguates by position — operand / primary / declarator-id position is a keyword-escaped identifier, post-operand position is the infix operator. Positions are mutually exclusive (same strategy as `*`, `&`, `<`). The escape yields a normal identifier, so lookup / mangling / linkage / ABI are unchanged. Details and examples in §12. |
 | D11 | Backtick is the sole spelling; no alternative/digraph spelling | **Proposed — disfavored alternatives recorded (§13)** | Markup friction (Markdown inline code) and keyboard ergonomics are real but minor: CommonMark's multi-backtick span already makes inline prose expressible and fenced blocks cover code samples (capability, not just ergonomics, is already there). A second spelling doubles teaching / clang-format / `-ast-print` / tooling surface, fragments the idiom, and swims against the trigraph-removed (C++17) / digraph-vestigial trend. If EWG ever forces one, an asymmetric self-delimiting pair (`\< … \>`) is the front-runner because it would *also* retire §5 and D3 — but that is a different operator, not a backtick alias. Full analysis and rebuttals in §13. |
 | D12 | Orthogonal to P2011 `\|>` (pipeline-rewrite, "pizza"); does not replace it | **Resolved** | Both bottom out in a call and the 2-arg case overlaps, but backtick is *symmetric binary infix* desugaring to an ordinary overload-resolved call, while `\|>` is a *non-overloadable syntactic rewrite* prepending the left operand to an arbitrary-arity call. Different shape, arity, precedence, mechanism, and idiom; they compose rather than compete. Backtick also deliberately declines the `\|>` spelling (§13.3 / §14.3) so both can coexist in one program. Full analysis in §15. |
+| D13 | Scope: pure core-language proposal; no standard-library additions | **Resolved** | Standardizing pipeline/composition helpers (`pipe`, `then`, `mbind`, …) would route the paper through LEWG as well as EWG/CWG — two tracks, the time-and-motion cost of D11 rebuttal 7 doubled. The operator needs no library to function; the §16 helpers are each a few lines of ordinary user code. Keep this paper language-only (EWG/CWG), target C++29, and defer any standard helpers to a companion library paper once usage experience shows which earn it. §16 carries them as *motivation*, not proposal. |
+| D14 | Both backtick usages (infix operator + keyword-escape) proposed jointly, in one paper | **Resolved** | Same lexical token (D10), same committee (EWG/CWG). Joint proposal *conserves EWG attention* — one "what does backtick mean" discussion, not two — and prevents the two uses being designed into *contradiction* if pursued independently (punctuator vs. lexer-synthesized identifier; divergent disambiguation). Consistent with D13, not contrary to it: the rule is **bundle what shares a design surface within one committee; split what is separable across committees** — so the two language uses bundle, the library layer (D13) splits off to LEWG. Resolves the §10 scope question. |
 
 Backtick is available because it has no current meaning in C++ source
 outside string/character literals and raw-string delimiters, all of which
@@ -248,10 +250,14 @@ and port.
 
 ## 10. Open questions
 
-- **Scope:** propose the infix operator and the backtick keyword-escape
-  (§12) jointly, or as companion proposals sharing the lexical syntax? The
-  escape is independently motivated (a future-keyword escape hatch; cf.
-  Swift `` `class` ``, Rust `r#`).
+- **Scope — Resolved (D14): jointly, one paper.** The infix operator and the
+  keyword-escape share one lexical token (D10), so they are co-designed in a
+  single paper — to conserve EWG attention (one backtick discussion, not two)
+  and to keep two independent designs from contradicting each other. The
+  escape stays independently *motivated* (a future-keyword escape hatch; cf.
+  Swift `` `class` ``, Rust `r#`) but is not independently *proposed*. Contrast
+  D13: the library layer *is* split off, because it is separable and crosses
+  into LEWG — the rule is bundle-within-a-committee, split-across-committees.
 
 ---
 
@@ -529,11 +535,15 @@ ones a desugar-to-call **cannot** express:
   **Walter Brown's logical-implication operator** is the canonical example:
   `p ==> q` ≡ `!p || q`, whose RHS is **not evaluated when `p` is false**.
   `p `implies` q` desugared to `implies(p, q)` evaluates `q` unconditionally
-  — observably different (side effects, cost, well-definedness). So
-  implication is genuinely *not* subsumed by backtick and remains a live
-  candidate for a real operator; `==>` is lexically available (14.3) and
-  mnemonic for `⟹`. (`&&`/`||` are in the language for exactly this
-  short-circuit reason; implication is the missing third.)
+  — observably different (side effects, cost, well-definedness) *when `q` is a
+  bare expression*. **But** a helper taking the RHS as a *thunk*
+  (`p `implies` [&]{ q }`) recovers the short-circuit (§16.5), and that is a
+  general user-space capability the language otherwise reserves to `&&`/`||`
+  (which overloading cannot restore). So the residual value of a dedicated
+  `==>` is *ergonomic* — omitting the per-call thunk for the common boolean
+  case — not a hard capability gap. It remains a reasonable candidate; `==>`
+  is lexically available (14.3) and mnemonic for `⟹` (the missing
+  short-circuit sibling of `&&`/`||`).
 - **Custom precedence/associativity** that the single backtick level (§4)
   cannot give.
 - **Ultra-high-frequency** operations where `x `op` y` ceremony genuinely
@@ -645,3 +655,185 @@ a binary operation," `|>` for "thread this value through these stages" — and
 explicitly disclaim that either subsumes the other. Recording it here so the
 EWG question ("doesn't one of these make the other unnecessary?") has a
 ready, worked answer.
+
+---
+
+## 16. Producing pipeline-like outcomes with backtick
+
+Backtick is symmetric binary infix, not a pipeline operator (§15) — but its
+operator slot is an *arbitrary callable expression*, and it chains
+left-associatively. Those two facts let a handful of patterns — each a few
+lines of *ordinary user code*, no standard-library addition — reproduce most
+pipeline / `|>` / ranges-`|` outcomes with no core language change beyond
+backtick itself. **The paper proposes none of these helpers**; scope is
+language-only (§16.7 / D13). They appear here as *motivation* — showing the
+operator's reach, and marking precisely where the one real gap vs. `|>` sits.
+
+### 16.1 The threading pattern — `pipe(x, f) = f(x)`
+
+One trivial helper turns backtick into a left-to-right value-threading
+operator:
+
+```cpp
+inline constexpr auto pipe =
+    [](auto&& x, auto&& f) -> decltype(auto)
+    { return std::invoke(std::forward<decltype(f)>(f),
+                         std::forward<decltype(x)>(x)); };
+
+x `pipe` f `pipe` g `pipe` h     // == h(g(f(x))) — left-assoc, data-flow order
+```
+
+Each stage is a unary callable; the reading order matches `|>`.
+
+### 16.2 It drives the existing range-adaptor closures unchanged
+
+The decisive case. Range adaptor *closures* (`views::filter(pred)`,
+`views::transform(fn)`) are **already unary callables** — `c | a` is *defined*
+as `a(c)`. So `pipe` feeds them directly, with no `bind`:
+
+```cpp
+r `pipe` views::filter(pred) `pipe` views::transform(fn)
+// identical result and laziness to:
+r |  views::filter(pred) |  views::transform(fn)
+```
+
+Same closures, same lazy views. Backtick + one helper is a drop-in spelling of
+the range pipe. The bespoke per-library `operator|` overloads exist only to
+choose the `|` *syntax*; the closure objects themselves need nothing, so they
+work under backtick for free.
+
+### 16.3 Parameterized free-function stages — `bind_back`
+
+For a plain free function that takes the piped value first plus extra
+arguments, fix the trailing args with `std::bind_back` (C++23) or a lambda:
+
+```cpp
+r `pipe` std::bind_back(filter, pred) `pipe` std::bind_back(transform, fn)
+// == transform(filter(r, pred), fn)
+```
+
+This is exactly the case P2011 `|>` writes more directly —
+`r |> filter(pred) |> transform(fn)`, arguments inline. Backtick needs the
+`bind_back`/lambda wrapper to turn the stage into a unary callable: same
+result, more ceremony. **This is the one ergonomic gap vs. `|>`** (§16.6).
+
+### 16.4 Reusable point-free pipelines — `then` (composition)
+
+Compose stages into a named pipeline once, apply it many times:
+
+```cpp
+inline constexpr auto then =
+    [](auto f, auto g)
+    { return [=](auto&&... a) -> decltype(auto)
+        { return g(f(std::forward<decltype(a)>(a)...)); }; };
+
+auto clean = trim `then` lower `then` dedup;   // a reusable callable
+clean(s);
+```
+
+Mirrors building a reusable view/adaptor chain; left-assoc backtick gives
+left-to-right composition.
+
+### 16.5 User-defined short-circuiting (non-strict) operators
+
+This is the strongest single argument in §16, so it leads. C++ reserves
+short-circuit / non-strict evaluation to a fixed set of built-ins — `&&`,
+`||`, `?:`, `,` — and you **cannot** get it back by overloading: an overloaded
+`operator&&` / `operator||` evaluates both operands (the classic footgun, and
+the reason the standard discourages overloading them). Backtick reopens this
+for users. A helper whose right operand is a *callable* controls whether — and
+when — that operand runs:
+
+```cpp
+// short-circuiting logical implication:  p ==> q  ≡  !p || q
+inline constexpr auto implies =
+    [](bool p, auto&& q) -> bool { return !p || q(); };
+
+p `implies` [&]{ return expensive(); }   // q() runs only when p holds
+```
+
+The same shape gives lazy defaults (`opt `or_else` [&]{ costly(); }`), guarded
+effects, and bespoke control operators — any binary operation that must *not*
+evaluate its right side unconditionally. This is a *general* user-facing
+capability the language otherwise denies, not a niche trick.
+
+The **monadic chain** is simply the zero-ceremony special case: the stages are
+already functions, so no thunk is written and short-circuiting falls out for
+free:
+
+```cpp
+inline constexpr auto mbind =
+    [](auto&& m, auto&& f)
+    { return std::forward<decltype(m)>(m)
+                 .and_then(std::forward<decltype(f)>(f)); };
+
+parse(s) `mbind` validate `mbind` store;   // stops at the first empty / error
+```
+
+(If "monadic" costs more audience than it earns in EWG, lead with the
+short-circuit framing above and present this as "chaining fallible steps" — the
+capability is the point, not the vocabulary.)
+
+This refines §14.4: backtick **can** express short-circuiting implication after
+all — when the right operand is passed as a thunk. What a dedicated `==>` adds
+is only the *ergonomics* of omitting that thunk for the common boolean case; it
+is not a hard capability gap. A bare-*expression* RHS still evaluates eagerly
+(backtick desugars to a call), so the thunk is the price of generality.
+
+### 16.6 What this recovers — and the one thing it doesn't
+
+Recovered, library-only (no core change beyond backtick itself):
+
+- left-to-right value threading (16.1–16.2),
+- the **entire existing ranges adaptor-closure ecosystem**, unchanged (16.2),
+- parameterized stages (16.3),
+- reusable point-free composition (16.4),
+- **user-defined short-circuiting / non-strict operators** (16.5) — a
+  capability the language otherwise reserves to `&&` / `||` / `?:` and that
+  operator overloading cannot recover; the monadic/fallible chain is its
+  zero-ceremony special case.
+
+Not recovered — the precise boundary with `|>`:
+
+- **P2011's inline-argument stage syntax.** `x |> f(a, b, c)` writes the extra
+  args in the call and threads `x` in front. Backtick stages must be *unary
+  callables*, so the extra args go through `bind_back`/a lambda (16.3). Same
+  outcome, more ceremony — this is exactly why backtick does not make `|>`
+  redundant (§15.4).
+- **Precedence direction.** Backtick binds *high* (tighter than `*`, §4),
+  whereas `|>` binds *low*. Pipe-style stages are normally primaries
+  (`views::filter(pred)`), so this is usually invisible; but a stage that is
+  itself a low-precedence expression must be parenthesised — the opposite
+  default from `|>`.
+
+Net: for the *common* pipeline use-cases, backtick plus a one-line helper
+(often just `pipe`) is sufficient and reuses the existing closure ecosystem;
+the dedicated `|>` earns its keep specifically for inline-argument stages and
+low-precedence chaining. Complementary, as §15 concludes.
+
+### 16.7 Scope: motivation, not a library proposal
+
+Every helper above is a few lines of *ordinary user code* — no standard-library
+addition is required for any of it, and the paper proposes none. That is
+deliberate and load-bearing for process:
+
+- **Keeps the paper in one committee track.** A core-language operator goes
+  through EWG/CWG. Bundling standard helpers would add an LEWG track — the
+  time-and-motion cost (D11 rebuttal 7, §13.5) doubled across two committees,
+  on two schedules, with two sets of bikeshedding. This proposal is
+  language-only (D13).
+- **The library layer is optional and can mature independently.** Because the
+  operator is expressive enough that `pipe` / `then` / `mbind` are
+  user-writable one-liners, there is no rush: land the language feature early
+  (targeting C++29), let real usage reveal which helpers are actually worth
+  standardizing, and bring those in a separate companion library paper later —
+  with field experience behind them rather than ahead.
+- **The patterns still pull their weight here, as *motivation*.** Showing the
+  reachable outcomes — especially that backtick drives the existing ranges
+  adaptor-closure ecosystem unchanged (§16.2) — helps EWG members who spend
+  less time on library design see *why* the operator is useful, without asking
+  them to approve any library surface. Direction without commitment.
+
+So §16 is a worked illustration of reach, explicitly out of scope for
+standardization, with a companion library paper named as the future home for
+anything that earns it.
