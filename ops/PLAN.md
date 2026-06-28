@@ -61,7 +61,7 @@ ninja -C "$B" check-clang                     # full regression gate
 - [x] **S11** AST wrapper for `-ast-print` fidelity — `ops/steps/11-ast-wrapper.md` (dep: S06)
 
 ### Phase D — Second implementation (GCC; full sub-plan in `ops/gcc/PLAN.md`)
-- [ ] **S12** GCC baseline & orientation — `ops/steps/12-gcc-bootstrap.md` (dep: A green)
+- [x] **S12** GCC baseline & orientation — `ops/steps/12-gcc-bootstrap.md` (dep: A green)
   - then GCC steps **G01–G09** in `ops/gcc/PLAN.md`
 
 ## Status log (S00 + each agent appends one line)
@@ -79,3 +79,4 @@ ninja -C "$B" check-clang                     # full regression gate
 | S09  | 2026-06-27 | backtick | d84f91cbd5d4 | PASS (1 env-only known-fail, 52219 total, 46454 passed) | ops/handoffs/09-escape-tests.handoff.md |
 | S10  | 2026-06-27 | backtick | f185e099e046 | PASS (1 env-only known-fail, 52223 total, 46450 passed, FormatTests 1270 all pass) | ops/handoffs/10-clang-format.handoff.md |
 | S11  | 2026-06-27 | backtick | 4243342f5438 | PASS (1 env-only known-fail, 52224 total, 46459 passed) | ops/handoffs/11-ast-wrapper.handoff.md |
+| S12  | 2026-06-27 | backtick | (see commit) | PASS — GCC 17.0.0 20260624 cc1plus built; g++.dg: 150598 pass, 9958 FAIL (6170 linker/libstdc++ absent, 3785 pre-existing trunk, 3 scan-tree-dump), 1001 xfail, 4213 unresolved, 1882 unsupported | ops/handoffs/12-gcc-bootstrap.handoff.md |
