@@ -345,7 +345,8 @@ alternative must clear is high: it must be (a) lexically unambiguous, and
 
 Both are real and both are *minor*. Critically, neither is a *capability*
 gap: CommonMark lets a longer backtick run delimit a span containing
-shorter runs (with one leading/trailing space stripped), so inline prose is
+shorter runs (with one leading/trailing space stripped) [CommonMark
+§ Code spans, spec.commonmark.org/0.31.2/#code-spans], so inline prose is
 expressible today — just ugly:
 
 ```
@@ -354,6 +355,15 @@ expressible today — just ugly:
 
 So any alternative spelling buys *ergonomics for the minority (inline prose)
 case*, nothing more.
+
+**Concrete evidence — the venue itself.** This is not merely a spec nicety: the
+double-backtick span renders correctly in the tools where committee members
+actually write inline prose. In particular **Mattermost, the WG21 chat server,
+supports it** — posting `` x `f` y `` displays as `x `f` y` (author-verified) —
+as does GitHub and any other CommonMark-based renderer. So in the very forum
+where the operator would most often be typed in running text, the friction is
+already a solved problem, which substantially weakens the motivation for an
+alternative spelling at its strongest point.
 
 ### 13.2 The lexical filter
 
