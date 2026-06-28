@@ -1,7 +1,7 @@
 # Handoff — S12 GCC baseline & orientation
 
 - **Status:** DONE (gate passed)
-- **Branch / commit:** `backtick` @ (this commit)
+- **Branch / commit:** `backtick` @ 3c7c36808000
 - **Date / agent:** 2026-06-27
 
 ## What changed
