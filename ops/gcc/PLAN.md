@@ -33,6 +33,8 @@ build (`--disable-bootstrap --enable-languages=c,c++`), and the `g++.dg` gate
 - [ ] **G07** Keyword-escape, position-based — `ops/gcc/steps/G07-escape.md` (dep: G03)
 - [ ] **G08** Tentative-parse / decl-vs-expr — `ops/gcc/steps/G08-escape-tentative.md` (dep: G07)
 - [ ] **G09** Escape tests + mangling — `ops/gcc/steps/G09-escape-tests.md` (dep: G08)
+### GCC infix operator — deferred fix
+- [ ] **G10** Revisit operator-slot ADL — `ops/gcc/steps/G10-adl-slot.md` (dep: G03)
 
 (No GCC analog of clang-format. Source-fidelity dumping is out of scope for
 the GCC track; desugar-only is sufficient for the paper's second data point.)
