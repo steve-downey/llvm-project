@@ -868,6 +868,28 @@ So §16 is a worked illustration of reach, explicitly out of scope for
 standardization, with a companion library paper named as the future home for
 anything that earns it.
 
+### 16.8 Validation (built Clang)
+
+Every pattern above was compiled and run against the `-fbacktick` Clang
+(`clang 23.0.0git`, the `build-backtick` dev build), C++23, `-Wall -Wextra`
+clean. A standalone program exercising each one passes end to end:
+
+- **16.1** `3 `pipe` inc `pipe` dbl `pipe` neg` → −8 (left-assoc threading).
+- **16.2** `v `pipe` views::filter(pred) `pipe` views::transform(fn)` yields the
+  **identical** result (sum 120) to `v | views::filter(pred) | views::transform(fn)` —
+  confirming backtick drives the *existing* range adaptor closures unchanged,
+  same laziness.
+- **16.3** `v `pipe` bind_back(filter,pred) `pipe` bind_back(map,fn)` → 60.
+- **16.4** `inc `then` dbl `then` neg` applied to 3 → −8.
+- **16.5** `implies` skips its RHS thunk when the antecedent is false and runs
+  it when true (short-circuit confirmed); the `mbind` optional chain yields 6
+  and short-circuits to empty on the failing input.
+
+So §16 is implementation experience, not assertion. (The program lives outside
+the regression suite for now; promoting a reduced form into `clang/test` is a
+cheap follow-up, and a natural item for the paper's implementation-experience
+section.)
+
 ---
 
 ## 17. Further semantic clarifications (D3 reframed, D15, D16, ADL)
