@@ -34,7 +34,7 @@ build (`--disable-bootstrap --enable-languages=c,c++`), and the `g++.dg` gate
 - [x] **G08** Tentative-parse / decl-vs-expr — `ops/gcc/steps/G08-escape-tentative.md` (dep: G07)
 - [x] **G09** Escape tests + mangling — `ops/gcc/steps/G09-escape-tests.md` (dep: G08)
 ### GCC infix operator — deferred fix
-- [ ] **G10** Revisit operator-slot ADL — `ops/gcc/steps/G10-adl-slot.md` (dep: G03)
+- [x] **G10** Revisit operator-slot ADL — `ops/gcc/steps/G10-adl-slot.md` (dep: G03)
 
 (No GCC analog of clang-format. Source-fidelity dumping is out of scope for
 the GCC track; desugar-only is sufficient for the paper's second data point.)
@@ -51,3 +51,4 @@ the GCC track; desugar-only is sufficient for the paper's second data point.)
 | G07  | 2026-06-28 | backtick | 570dc317d8e (gcc-backtick) | PASS — 73 backtick tests pass (+9 from escape.C/escape-diag.C; 105 parse tests 0 fail) | ops/gcc/handoffs/G07-escape.handoff.md |
 | G08  | 2026-06-28 | backtick | 8d1458de5f4 (gcc-backtick) | PASS — 76 backtick tests pass (+3 from escape-tentative.C; 105 parse tests 0 fail; no code changes needed) | ops/gcc/handoffs/G08-escape-tentative.handoff.md |
 | G09  | 2026-06-28 | backtick | 661762b5055 (gcc-backtick) | PASS — 85 backtick tests pass (+9 from escape-abi.C; 105 parse tests 0 fail; mangling _Z3newii/_ZN6Widget6deleteEv confirmed identical to Clang S09) | ops/gcc/handoffs/G09-escape-tests.handoff.md |
+| G10  | 2026-06-28 | backtick | b842ac1ed64 (gcc-backtick) | PASS — 88 backtick tests pass (+3 from infix-adl.C; 105 parse tests 0 fail; pure ADL and augmentation confirmed) | ops/gcc/handoffs/G10-adl-slot.handoff.md |
