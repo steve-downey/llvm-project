@@ -168,10 +168,24 @@ for `>` inside template-argument lists:
    for the operator slot; expect close ``` ` ```; parse the RHS operand via
    `ParseCastExpression`; continue the left-associative loop.
 4. **Sema** (`clang/lib/Sema/SemaExpr.cpp`). Small entry point forwarding
-   to `BuildCallExpr` with callee = operator slot, args = {LHS, RHS}.
-   Carry the backtick source locations for diagnostics and `-ast-print`.
-5. **Gating** (D5). `LangOptions.def`, a driver flag in `Options.td`,
-   wired in `CompilerInvocation.cpp`.
+   to `BuildCallExpr` with callee = operator slot, args = {LHS, RHS}. The two
+   backtick token locations need no dedicated fields — pass them as the call's
+   open/close paren locations (the inner `CallExpr`'s LParen/RParen), which is
+   enough for source ranges and lets the phase-2 wrapper's pretty-printer
+   reconstruct the syntax from structure (LHS, callee, RHS) rather than from
+   stored locations (DEV-05). Dedicated backtick-location storage is needed
+   only if a diagnostic must point at an individual backtick token.
+5. **Gating** (D5). A `LANGOPT` in `LangOptions.def` — use the current 5-arg
+   form `LANGOPT(Name, Bits, Default, Compatibility, Description)`, e.g.
+   `LANGOPT(Backtick, 1, 0, NotCompatible, "backtick operator")`; the old
+   4-arg form no longer compiles (DEV-02). The driver/`-cc1` flag lives in
+   `clang/include/clang/Options/Options.td` — the file moved there from
+   `.../Driver/Options.td` (DEV-01). Add marshalling in `CompilerInvocation.cpp`, but
+   note marshalling alone does **not** forward the flag into the `-cc1` argv:
+   `Clang.cpp::ConstructJob()` needs an explicit
+   `Args.addLastArg(CmdArgs, OPT_fbacktick, OPT_fno_backtick)` (as
+   `-fsized-deallocation` / `-freflection` do) for driver-level visibility
+   (DEV-03).
 6. **Diagnostics.** Empty operator slot (` `` `), unterminated backtick,
    D3 ambiguity (bare nested backtick). Callee/arity/constexpr errors fall
    out of `BuildCallExpr`.
@@ -271,8 +285,12 @@ and port.
   call. Enough for people to kick the tires and for the paper's
   implementation-experience section.
 - **Phase 2 — source fidelity (Clang).** Thin transparent AST wrapper (D7)
-  so `-ast-print` round-trips backtick syntax. Purely additive; lands once
-  the MVP is stable.
+  so `-ast-print` round-trips backtick syntax. The wrapper's pretty-printer
+  reconstructs the surface form from structure (LHS, callee, RHS); the
+  backtick token locations it needs are already the inner `CallExpr`'s
+  open/close paren locations, so no separate `SourceLocation` fields are
+  required on the wrapper node (DEV-05). Purely additive; lands once the MVP
+  is stable.
 - **Phase 3 — reach.** Compiler Explorer deployment once stable; GCC
   implementation in parallel for the second independent data point.
 
