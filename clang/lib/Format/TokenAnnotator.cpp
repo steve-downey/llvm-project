@@ -2419,11 +2419,12 @@ private:
         // Open backtick: infix if post-operand, escape otherwise.
         const FormatToken *Prev = Current.getPreviousNonComment();
         bool PostOperand =
-            Prev && (Prev->Tok.isLiteral() ||
-                     Prev->isOneOf(tok::identifier, tok::r_paren, tok::r_square,
-                                   tok::r_brace, tok::kw_true, tok::kw_false,
-                                   tok::kw_nullptr, tok::kw_this,
-                                   TT_BacktickEscapeClose, TT_BacktickInfixClose));
+            Prev &&
+            (Prev->Tok.isLiteral() ||
+             Prev->isOneOf(tok::identifier, tok::r_paren, tok::r_square,
+                           tok::r_brace, tok::kw_true, tok::kw_false,
+                           tok::kw_nullptr, tok::kw_this,
+                           TT_BacktickEscapeClose, TT_BacktickInfixClose));
         if (PostOperand) {
           Current.setType(TT_BacktickInfixOpen);
           PendingBacktickKind = TT_BacktickInfixOpen;
@@ -4760,8 +4761,9 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
   // Backtick infix/escape: canonical style is spaces outside, hug inside.
   // e.g.  x `f` y   and   `new`(...)
   if (Left.isOneOf(TT_BacktickInfixOpen, TT_BacktickEscapeOpen) ||
-      Right.isOneOf(TT_BacktickInfixClose, TT_BacktickEscapeClose))
+      Right.isOneOf(TT_BacktickInfixClose, TT_BacktickEscapeClose)) {
     return false; // no space after open or before close
+  }
   if (Left.is(TT_BacktickInfixClose))
     return true; // space after infix close (before next operand)
   if (Right.is(TT_BacktickInfixOpen))
@@ -6382,8 +6384,9 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
   // D8: hard-forbid breaks adjacent to backtick delimiters (after open, before
   // close) for both infix and escape uses.
   if (Left.isOneOf(TT_BacktickInfixOpen, TT_BacktickEscapeOpen) ||
-      Right.isOneOf(TT_BacktickInfixClose, TT_BacktickEscapeClose))
+      Right.isOneOf(TT_BacktickInfixClose, TT_BacktickEscapeClose)) {
     return false;
+  }
   // Language-specific stuff.
   if (Style.isCSharp()) {
     if (Left.isOneOf(TT_CSharpNamedArgumentColon, TT_AttributeColon) ||

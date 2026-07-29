@@ -4501,8 +4501,9 @@ LangOptions getFormattingLangOpts(const FormatStyle &Style) {
   LangOpts.DeclSpecKeyword = 1; // To get __declspec.
   LangOpts.C99 = 1; // To get kw_restrict for non-underscore-prefixed restrict.
   if (Style.Language == FormatStyle::LK_Cpp ||
-      Style.Language == FormatStyle::LK_ObjC)
+      Style.Language == FormatStyle::LK_ObjC) {
     LangOpts.Backtick = 1;
+  }
 
   return LangOpts;
 }
