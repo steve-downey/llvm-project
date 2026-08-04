@@ -39,13 +39,18 @@ namespace prec {
     Shift           = 12,   // <<, >>
     Additive        = 13,   // -, +
     Multiplicative  = 14,   // *, /, %
-    PointerToMember = 15    // .*, ->*
+    PointerToMember = 15,   // .*, ->*
+    UserInfix       = 16    // x <user-operator> y
   };
 }
 
 /// Return the precedence of the specified binary operator token.
+///
+/// \p UnicodeOperatorsEnabled says whether tok::user_operator is an infix
+/// operator in this translation unit; it is LangOptions::UnicodeOperators.
 prec::Level getBinOpPrecedence(tok::TokenKind Kind, bool GreaterThanIsOperator,
-                               bool CPlusPlus11);
+                               bool CPlusPlus11,
+                               bool UnicodeOperatorsEnabled = false);
 
 }  // end namespace clang
 

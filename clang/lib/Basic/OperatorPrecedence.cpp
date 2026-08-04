@@ -15,8 +15,17 @@
 namespace clang {
 
 prec::Level getBinOpPrecedence(tok::TokenKind Kind, bool GreaterThanIsOperator,
-                               bool CPlusPlus11) {
+                               bool CPlusPlus11,
+                               bool UnicodeOperatorsEnabled) {
   switch (Kind) {
+  case tok::user_operator:
+    // A Unicode user-defined operator occupies one precedence level of its
+    // own, above every built-in binary operator: one level for all
+    // user-introduced infix syntax, so chains group left with no extra table
+    // to learn.  The lexer only ever produces this token when the feature is
+    // on; the flag is checked here too so the level is gated where it is
+    // defined.
+    return UnicodeOperatorsEnabled ? prec::UserInfix : prec::Unknown;
   case tok::greater:
     // C++ [temp.names]p3:
     //   [...] When parsing a template-argument-list, the first

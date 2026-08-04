@@ -305,7 +305,7 @@ bool Parser::isNotExpressionStart() {
 
 bool Parser::isFoldOperator(prec::Level Level) const {
   return Level > prec::Unknown && Level != prec::Conditional &&
-         Level != prec::Spaceship;
+         Level != prec::Spaceship && Level != prec::UserInfix;
 }
 
 bool Parser::isFoldOperator(tok::TokenKind Kind) const {
@@ -316,7 +316,8 @@ ExprResult
 Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
   prec::Level NextTokPrec = getBinOpPrecedence(Tok.getKind(),
                                                GreaterThanIsOperator,
-                                               getLangOpts().CPlusPlus11);
+                                               getLangOpts().CPlusPlus11,
+                                               getLangOpts().UnicodeOperators);
   SourceLocation ColonLoc;
 
   auto SavedType = PreferredType;
@@ -491,7 +492,8 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
     // operator immediately to the right of the RHS.
     prec::Level ThisPrec = NextTokPrec;
     NextTokPrec = getBinOpPrecedence(Tok.getKind(), GreaterThanIsOperator,
-                                     getLangOpts().CPlusPlus11);
+                                     getLangOpts().CPlusPlus11,
+                                     getLangOpts().UnicodeOperators);
 
     // Assignment and conditional expressions are right-associative.
     bool isRightAssoc = ThisPrec == prec::Conditional ||
@@ -520,7 +522,8 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
       }
 
       NextTokPrec = getBinOpPrecedence(Tok.getKind(), GreaterThanIsOperator,
-                                       getLangOpts().CPlusPlus11);
+                                       getLangOpts().CPlusPlus11,
+                                       getLangOpts().UnicodeOperators);
     }
 
     if (!RHS.isInvalid() && RHSIsInitList) {
