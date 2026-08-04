@@ -888,4 +888,78 @@ TEST_F(LexerTest, FindEndOfIdentifierContinuation) {
   EXPECT_EQ(Measure("ab$cd", 2), 0u); // '$' is not identifier continue.
 }
 
+// U03: -funicode-operators makes a member of the frozen U1 set lex as one
+// tok::user_operator token.  The lit test in clang/test/Lexer covers the
+// observable token stream; these cover the thing -dump-tokens cannot show --
+// that the token's *identity*, its code point, is recoverable from nothing but
+// its spelling.
+TEST_F(LexerTest, UnicodeOperatorToken) {
+  LangOpts.CPlusPlus = true;
+  LangOpts.UnicodeOperators = true;
+
+  // "a ⊞ b" spelled directly as UTF-8.
+  std::vector<Token> Toks =
+      CheckLex("a \xE2\x8A\x9E b",
+               {tok::identifier, tok::user_operator, tok::identifier});
+  EXPECT_EQ(0x229Eu,
+            Lexer::getUserOperatorCodePoint(Toks[1], SourceMgr, LangOpts));
+}
+
+TEST_F(LexerTest, UnicodeOperatorAdjacency) {
+  LangOpts.CPlusPlus = true;
+  LangOpts.UnicodeOperators = true;
+
+  // No whitespace: the operator splits the identifiers, because no U1 code
+  // point is XID_Continue (U10).
+  std::vector<Token> Toks =
+      CheckLex("a\xE2\x8A\x9E"
+               "b",
+               {tok::identifier, tok::user_operator, tok::identifier});
+  EXPECT_EQ(0x229Eu,
+            Lexer::getUserOperatorCodePoint(Toks[1], SourceMgr, LangOpts));
+}
+
+TEST_F(LexerTest, UnicodeOperatorsAreNeverAPrefixOfEachOther) {
+  LangOpts.CPlusPlus = true;
+  LangOpts.UnicodeOperators = true;
+
+  // Two operators in a row are two tokens (U1: one code point per token, and
+  // no operator is a prefix of another -- there is no maximal munch question).
+  std::vector<Token> Toks = CheckLex("\xE2\x8A\x9E\xE2\x8A\x97",
+                                     {tok::user_operator, tok::user_operator});
+  EXPECT_EQ(0x229Eu,
+            Lexer::getUserOperatorCodePoint(Toks[0], SourceMgr, LangOpts));
+  EXPECT_EQ(0x2297u,
+            Lexer::getUserOperatorCodePoint(Toks[1], SourceMgr, LangOpts));
+}
+
+TEST_F(LexerTest, UnicodeOperatorRequiresTheFlag) {
+  LangOpts.CPlusPlus = true;
+  LangOpts.UnicodeOperators = false;
+
+  for (const Token &Tok : Lex("a \xE2\x8A\x9E b"))
+    EXPECT_FALSE(Tok.is(tok::user_operator));
+}
+
+TEST_F(LexerTest, UnicodeOperatorExcludedCodePointIsNotAToken) {
+  LangOpts.CPlusPlus = true;
+  LangOpts.UnicodeOperators = true;
+
+  // U+2212 MINUS SIGN is a named exclusion (confusable with '-'), so it stays
+  // out even with the flag on.  U05 gives it a better diagnostic; U03 only has
+  // to not mint a token for it.
+  for (const Token &Tok : Lex("a \xE2\x88\x92 b"))
+    EXPECT_FALSE(Tok.is(tok::user_operator));
+}
+
+TEST_F(LexerTest, UnicodeOperatorCodePointFromSpelling) {
+  // The decode is total over one-code-point spellings and rejects everything
+  // else, which is what lets the token carry no payload.
+  EXPECT_EQ(0x229Eu, Lexer::getUserOperatorCodePoint("\xE2\x8A\x9E"));
+  EXPECT_EQ(0x21A6u, Lexer::getUserOperatorCodePoint("\xE2\x86\xA6"));
+  EXPECT_EQ(0u, Lexer::getUserOperatorCodePoint(""));
+  EXPECT_EQ(0u, Lexer::getUserOperatorCodePoint("\xE2\x8A\x9E\xE2\x8A\x97"));
+  EXPECT_EQ(0u, Lexer::getUserOperatorCodePoint("\xE2\x8A"));
+}
+
 } // anonymous namespace

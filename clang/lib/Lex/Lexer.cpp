@@ -12,6 +12,7 @@
 
 #include "clang/Lex/Lexer.h"
 #include "UnicodeCharSets.h"
+#include "UnicodeOperatorCharSets.h"
 #include "clang/Basic/CharInfo.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/IdentifierTable.h"
@@ -500,6 +501,36 @@ unsigned Lexer::getSpelling(const Token &Tok, const char *&Buffer,
 
   // Otherwise, hard case, relex the characters into the string.
   return getSpellingSlow(Tok, TokStart, LangOpts, const_cast<char*>(Buffer));
+}
+
+uint32_t Lexer::getUserOperatorCodePoint(StringRef Spelling) {
+  // A user-operator token is exactly one code point (U1): no combining marks,
+  // no multi-character operators, no operator a prefix of another.  So the
+  // decode is total -- either the whole spelling is one scalar value or this
+  // is not a user-operator spelling at all.
+  if (Spelling.empty())
+    return 0;
+
+  const auto *Begin = reinterpret_cast<const llvm::UTF8 *>(Spelling.begin());
+  const auto *End = reinterpret_cast<const llvm::UTF8 *>(Spelling.end());
+  llvm::UTF32 CodePoint = 0;
+  if (llvm::convertUTF8Sequence(&Begin, End, &CodePoint,
+                                llvm::strictConversion) != llvm::conversionOK)
+    return 0;
+  if (Begin != End)
+    return 0;
+  return CodePoint;
+}
+
+uint32_t Lexer::getUserOperatorCodePoint(const Token &Tok,
+                                         const SourceManager &SourceMgr,
+                                         const LangOptions &LangOpts) {
+  assert(Tok.is(tok::user_operator) && "expected a user-operator token");
+  bool Invalid = false;
+  std::string Spelling = getSpelling(Tok, SourceMgr, LangOpts, &Invalid);
+  if (Invalid)
+    return 0;
+  return getUserOperatorCodePoint(Spelling);
 }
 
 /// MeasureTokenLength - Relex the token at the specified location and return
@@ -1904,6 +1935,14 @@ bool Lexer::tryConsumeIdentifierUTF8Char(const char *&CurPtr, Token &Result) {
   if (!isAllowedIDChar(static_cast<uint32_t>(CodePoint), LangOpts,
                        IsExtension)) {
     if (isASCII(CodePoint) || isUnicodeWhitespace(CodePoint))
+      return false;
+
+    // Under -funicode-operators a U1 code point is an operator token, not a
+    // stray character to be absorbed into the identifier "for recovery
+    // purposes" below.  Ending the identifier here is what makes `a⊞b` three
+    // tokens without any whitespace rule.  (Off the flag, control falls
+    // through to the unchanged recovery path.)
+    if (LangOpts.UnicodeOperators && isUserOperatorChar(CodePoint))
       return false;
 
     bool DiagnoseAndContinue = !isLexingRawMode() &&
@@ -4606,6 +4645,20 @@ LexStart:
         // We only saw whitespace, so just try again with this lexer.
         // (We manually eliminate the tail call to avoid recursion.)
         goto LexNextToken;
+      }
+      // A member of the frozen U1 set lexes as a user-defined operator token.
+      // Lexing is declaration-independent (U3): membership is a static
+      // property of the code point, so this runs *before* the identifier
+      // classification.  The order is immaterial to behavior -- U10 makes the
+      // two sets disjoint, and U02 measured that against Clang's own XID
+      // tables for all 1381 members -- but taking it first leaves the
+      // -funicode-operators test as the only thing between a code point and
+      // the upstream path, which is what makes "flag off == upstream" hold by
+      // inspection.
+      if (LangOpts.UnicodeOperators && isUserOperatorChar(CodePoint)) {
+        MIOpt.ReadToken();
+        FormTokenWithChars(Result, CurPtr, tok::user_operator);
+        return true;
       }
       return LexUnicodeIdentifierStart(Result, CodePoint, CurPtr);
     }
