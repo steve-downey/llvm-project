@@ -4187,6 +4187,11 @@ public:
     case DeclarationName::CXXConversionFunctionName:
     case DeclarationName::CXXUsingDirective:
       break;
+    case DeclarationName::CXXUserOperatorName:
+      // U17 chooses the on-disk key encoding (a uint32 code point) and the
+      // matching DeclarationNameKey hash. Not reachable before U07.
+      llvm_unreachable("U17: Unicode user operator name serialization not "
+                       "implemented");
     }
 
     // length of DeclIDs.
@@ -4221,6 +4226,10 @@ public:
     case DeclarationName::CXXConversionFunctionName:
     case DeclarationName::CXXUsingDirective:
       return;
+    case DeclarationName::CXXUserOperatorName:
+      // See EmitKeyDataLengthBase; U17.
+      llvm_unreachable("U17: Unicode user operator name serialization not "
+                       "implemented");
     }
 
     llvm_unreachable("Invalid name kind?");
@@ -7242,6 +7251,10 @@ void ASTRecordWriter::AddDeclarationNameLoc(const DeclarationNameLoc &DNLoc,
 
   case DeclarationName::CXXLiteralOperatorName:
     AddSourceLocation(DNLoc.getCXXLiteralOperatorNameLoc());
+    break;
+
+  case DeclarationName::CXXUserOperatorName:
+    AddSourceLocation(DNLoc.getCXXUserOperatorNameLoc());
     break;
 
   case DeclarationName::Identifier:

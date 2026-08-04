@@ -133,6 +133,38 @@ public:
   void Profile(llvm::FoldingSetNodeID &FSID) { FSID.AddPointer(ID); }
 };
 
+/// Contains the Unicode code point that makes up the name of a user-defined
+/// operator, e.g. the U+229E of `operator⊞`.
+///
+/// Unlike CXXOperatorIdName, this is not an index into a closed enumeration:
+/// the operator set is a 1,381-member table (U1), so the name is keyed by the
+/// code point itself. The code point is the *canonical* identity — the lexer
+/// (Lexer::getUserOperatorCodePoint) has already collapsed every spelling of
+/// the operator, glyph or universal-character-name, to one scalar value — so
+/// `operator⊞`, `operator⊞` and `operator\N{SQUARED PLUS}` all reach
+/// this class with the same payload and therefore unique to one name.
+class alignas(IdentifierInfoAlignment) CXXUserOperatorIdName
+    : public detail::DeclarationNameExtra,
+      public llvm::FoldingSetNode {
+  friend class clang::DeclarationName;
+  friend class clang::DeclarationNameTable;
+
+  /// The Unicode scalar value naming this operator.
+  uint32_t CodePoint;
+
+  /// Extra information associated with this operator name that
+  /// can be used by the front end. All bits are really needed
+  /// so it is not possible to stash something in the low order bits.
+  void *FETokenInfo;
+
+  CXXUserOperatorIdName(uint32_t CP)
+      : DeclarationNameExtra(CXXUserOperatorName), CodePoint(CP),
+        FETokenInfo(nullptr) {}
+
+public:
+  void Profile(llvm::FoldingSetNodeID &FSID) { FSID.AddInteger(CodePoint); }
+};
+
 } // namespace detail
 
 /// The name of a declaration. In the common case, this just stores
@@ -189,7 +221,8 @@ class DeclarationName {
                     alignof(detail::CXXSpecialNameExtra) >= 8 &&
                     alignof(detail::CXXOperatorIdName) >= 8 &&
                     alignof(detail::CXXDeductionGuideNameExtra) >= 8 &&
-                    alignof(detail::CXXLiteralOperatorIdName) >= 8,
+                    alignof(detail::CXXLiteralOperatorIdName) >= 8 &&
+                    alignof(detail::CXXUserOperatorIdName) >= 8,
                 "The various classes that DeclarationName::Ptr can point to"
                 " must be at least aligned to 8 bytes!");
 
@@ -222,6 +255,9 @@ public:
     CXXUsingDirective =
         llvm::addEnumValues(UncommonNameKindOffset,
                             detail::DeclarationNameExtra::CXXUsingDirective),
+    CXXUserOperatorName =
+        llvm::addEnumValues(UncommonNameKindOffset,
+                            detail::DeclarationNameExtra::CXXUserOperatorName),
     ObjCMultiArgSelector =
         llvm::addEnumValues(UncommonNameKindOffset,
                             detail::DeclarationNameExtra::ObjCMultiArgSelector),
@@ -345,6 +381,14 @@ private:
     assert(getNameKind() == CXXLiteralOperatorName &&
            "DeclarationName does not store a CXXLiteralOperatorIdName!");
     return static_cast<detail::CXXLiteralOperatorIdName *>(getPtr());
+  }
+
+  /// Assert that the stored pointer points to a CXXUserOperatorIdName
+  /// and return it.
+  detail::CXXUserOperatorIdName *castAsCXXUserOperatorIdName() const {
+    assert(getNameKind() == CXXUserOperatorName &&
+           "DeclarationName does not store a CXXUserOperatorIdName!");
+    return static_cast<detail::CXXUserOperatorIdName *>(getPtr());
   }
 
   /// Get and set the FETokenInfo in the less common cases where the
@@ -515,6 +559,21 @@ public:
     return nullptr;
   }
 
+  /// If this name is the name of a Unicode user-defined operator
+  /// (e.g. @c operator⊞), retrieve the operator's code point; otherwise 0.
+  ///
+  /// 0 is not a valid user-operator code point (U1 admits only non-ASCII
+  /// Pattern_Syntax characters), so it doubles as the "not one of these"
+  /// answer — the same convention Lexer::getUserOperatorCodePoint uses.
+  uint32_t getCXXUserOperatorCodePoint() const {
+    if (getNameKind() == CXXUserOperatorName) {
+      assert(getPtr() &&
+             "getCXXUserOperatorCodePoint on a null DeclarationName!");
+      return castAsCXXUserOperatorIdName()->CodePoint;
+    }
+    return 0;
+  }
+
   /// Get the Objective-C selector stored in this declaration name.
   Selector getObjCSelector() const {
     assert((getNameKind() == ObjCZeroArgSelector ||
@@ -621,6 +680,12 @@ class DeclarationNameTable {
   /// from the corresponding IdentifierInfo.
   llvm::FoldingSet<detail::CXXLiteralOperatorIdName> CXXLiteralOperatorNames;
 
+  /// Manage the uniqued CXXUserOperatorIdName, which contain extra
+  /// information for the name of a Unicode user-defined operator.
+  /// getCXXUserOperatorName can be used to obtain a DeclarationName from
+  /// the corresponding code point.
+  llvm::FoldingSet<detail::CXXUserOperatorIdName> CXXUserOperatorNames;
+
   /// Manage the uniqued CXXDeductionGuideNameExtra, which contain
   /// extra information for the name of a C++ deduction guide.
   /// getCXXDeductionGuideName can be used to obtain a DeclarationName
@@ -668,6 +733,14 @@ public:
 
   /// Get the name of the literal operator function with II as the identifier.
   DeclarationName getCXXLiteralOperatorName(const IdentifierInfo *II);
+
+  /// Get the name of the Unicode user-defined operator function whose
+  /// operator is the code point CodePoint (e.g. 0x229E for `operator⊞`).
+  ///
+  /// CodePoint must be the canonical scalar value produced by
+  /// Lexer::getUserOperatorCodePoint, so that every spelling of the operator
+  /// yields the same DeclarationName.
+  DeclarationName getCXXUserOperatorName(uint32_t CodePoint);
 };
 
 /// DeclarationNameLoc - Additional source/type location info
@@ -695,6 +768,12 @@ class DeclarationNameLoc {
     SourceLocation OpNameLoc;
   };
 
+  // The location (if any) of the operator keyword is stored elsewhere.
+  // A user operator is a single code point, so one location suffices.
+  struct CXXUserOpName {
+    SourceLocation OpNameLoc;
+  };
+
   // struct {} CXXUsingDirective;
   // struct {} ObjCZeroArgSelector;
   // struct {} ObjCOneArgSelector;
@@ -703,6 +782,7 @@ class DeclarationNameLoc {
     struct NT NamedType;
     struct CXXOpName CXXOperatorName;
     struct CXXLitOpName CXXLiteralOperatorName;
+    struct CXXUserOpName CXXUserOperatorName;
   };
 
   void setNamedTypeLoc(TypeSourceInfo *TInfo) { NamedType.TInfo = TInfo; }
@@ -714,6 +794,10 @@ class DeclarationNameLoc {
 
   void setCXXLiteralOperatorNameLoc(SourceLocation Loc) {
     CXXLiteralOperatorName.OpNameLoc = Loc;
+  }
+
+  void setCXXUserOperatorNameLoc(SourceLocation Loc) {
+    CXXUserOperatorName.OpNameLoc = Loc;
   }
 
 public:
@@ -750,6 +834,13 @@ public:
     return CXXLiteralOperatorName.OpNameLoc;
   }
 
+  /// Return the location of the user-operator name (without the operator
+  /// keyword). Assumes that the object stores location information of a
+  /// Unicode user-defined operator.
+  SourceLocation getCXXUserOperatorNameLoc() const {
+    return CXXUserOperatorName.OpNameLoc;
+  }
+
   /// Construct location information for a constructor, destructor or conversion
   /// operator.
   static DeclarationNameLoc makeNamedTypeLoc(TypeSourceInfo *TInfo) {
@@ -775,6 +866,13 @@ public:
   static DeclarationNameLoc makeCXXLiteralOperatorNameLoc(SourceLocation Loc) {
     DeclarationNameLoc DNL;
     DNL.setCXXLiteralOperatorNameLoc(Loc);
+    return DNL;
+  }
+
+  /// Construct location information for a Unicode user-defined operator.
+  static DeclarationNameLoc makeCXXUserOperatorNameLoc(SourceLocation Loc) {
+    DeclarationNameLoc DNL;
+    DNL.setCXXUserOperatorNameLoc(Loc);
     return DNL;
   }
 };
@@ -867,6 +965,23 @@ public:
   void setCXXLiteralOperatorNameLoc(SourceLocation Loc) {
     assert(Name.getNameKind() == DeclarationName::CXXLiteralOperatorName);
     LocInfo = DeclarationNameLoc::makeCXXLiteralOperatorNameLoc(Loc);
+  }
+
+  /// getCXXUserOperatorNameLoc - Returns the location of the user-operator
+  /// name (not the operator keyword).
+  /// Assumes it is a Unicode user-defined operator.
+  SourceLocation getCXXUserOperatorNameLoc() const {
+    if (Name.getNameKind() != DeclarationName::CXXUserOperatorName)
+      return SourceLocation();
+    return LocInfo.getCXXUserOperatorNameLoc();
+  }
+
+  /// setCXXUserOperatorNameLoc - Sets the location of the user-operator
+  /// name (not the operator keyword).
+  /// Assumes it is a Unicode user-defined operator.
+  void setCXXUserOperatorNameLoc(SourceLocation Loc) {
+    assert(Name.getNameKind() == DeclarationName::CXXUserOperatorName);
+    LocInfo = DeclarationNameLoc::makeCXXUserOperatorNameLoc(Loc);
   }
 
   /// Determine whether this name involves a template parameter.
