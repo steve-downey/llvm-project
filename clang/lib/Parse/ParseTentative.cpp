@@ -828,6 +828,16 @@ Parser::TPResult Parser::TryParseOperatorId() {
     ConsumeToken();
     return TPResult::True;
 
+  case tok::user_operator:
+    // operator ⊞ (-funicode-operators). Unambiguously an
+    // operator-function-id: a user-operator token can never begin a
+    // conversion-type-id or a literal-operator-id.
+    if (getLangOpts().UnicodeOperators) {
+      ConsumeToken();
+      return TPResult::True;
+    }
+    break;
+
   case tok::l_square:
     if (NextToken().is(tok::r_square)) {
       ConsumeBracket();

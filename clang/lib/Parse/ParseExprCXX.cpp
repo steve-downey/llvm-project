@@ -17,6 +17,7 @@
 #include "clang/Basic/PrettyStackTrace.h"
 #include "clang/Basic/TemplateKinds.h"
 #include "clang/Basic/TokenKinds.h"
+#include "clang/Lex/Lexer.h"
 #include "clang/Lex/LiteralSupport.h"
 #include "clang/Parse/Parser.h"
 #include "clang/Parse/RAIIObjectsForParser.h"
@@ -292,7 +293,8 @@ bool Parser::ParseOptionalCXXScopeSpecifier(
         }
 
         if (TemplateName.getKind() != UnqualifiedIdKind::IK_OperatorFunctionId &&
-            TemplateName.getKind() != UnqualifiedIdKind::IK_LiteralOperatorId) {
+            TemplateName.getKind() != UnqualifiedIdKind::IK_LiteralOperatorId &&
+            TemplateName.getKind() != UnqualifiedIdKind::IK_UserOperatorId) {
           Diag(TemplateName.getSourceRange().getBegin(),
                diag::err_id_after_template_in_nested_name_spec)
             << TemplateName.getSourceRange();
@@ -2260,6 +2262,7 @@ bool Parser::ParseUnqualifiedIdTemplateId(
   case UnqualifiedIdKind::IK_Identifier:
   case UnqualifiedIdKind::IK_OperatorFunctionId:
   case UnqualifiedIdKind::IK_LiteralOperatorId:
+  case UnqualifiedIdKind::IK_UserOperatorId:
     if (AssumeTemplateId) {
       // We defer the injected-class-name checks until we've found whether
       // this template-id is used to form a nested-name-specifier or not.
@@ -2291,7 +2294,11 @@ bool Parser::ParseUnqualifiedIdTemplateId(
           std::string Name;
           if (Id.getKind() == UnqualifiedIdKind::IK_Identifier)
             Name = std::string(Id.Identifier->getName());
-          else {
+          else if (Id.getKind() == UnqualifiedIdKind::IK_UserOperatorId) {
+            // The code point, not a spelling, is what identifies a Unicode
+            // user operator; let the DeclarationName re-encode it.
+            Name = Actions.GetNameFromUnqualifiedId(Id).getName().getAsString();
+          } else {
             Name = "operator ";
             if (Id.getKind() == UnqualifiedIdKind::IK_OperatorFunctionId)
               Name += getOperatorSpelling(Id.OperatorFunctionId.Operator);
@@ -2364,16 +2371,21 @@ bool Parser::ParseUnqualifiedIdTemplateId(
 
   if (Id.getKind() == UnqualifiedIdKind::IK_Identifier ||
       Id.getKind() == UnqualifiedIdKind::IK_OperatorFunctionId ||
-      Id.getKind() == UnqualifiedIdKind::IK_LiteralOperatorId) {
+      Id.getKind() == UnqualifiedIdKind::IK_LiteralOperatorId ||
+      Id.getKind() == UnqualifiedIdKind::IK_UserOperatorId) {
     // Form a parsed representation of the template-id to be stored in the
     // UnqualifiedId.
 
     // FIXME: Store name for literal operator too.
+    // FIXME: Nor for a Unicode user operator; TemplateIdAnnotation has no slot
+    // for a code point. The Template/TNK carry the resolved name, so this only
+    // costs diagnostic quality (U16).
     const IdentifierInfo *TemplateII =
         Id.getKind() == UnqualifiedIdKind::IK_Identifier ? Id.Identifier
                                                          : nullptr;
     OverloadedOperatorKind OpKind =
-        Id.getKind() == UnqualifiedIdKind::IK_Identifier
+        (Id.getKind() == UnqualifiedIdKind::IK_Identifier ||
+         Id.getKind() == UnqualifiedIdKind::IK_UserOperatorId)
             ? OO_None
             : Id.OperatorFunctionId.Operator;
 
@@ -2493,6 +2505,22 @@ bool Parser::ParseUnqualifiedIdOperator(CXXScopeSpec &SS, bool EnteringContext,
   if (Op != OO_None) {
     // We have parsed an operator-function-id.
     Result.setOperatorFunctionId(KeywordLoc, Op, SymbolLocations);
+    return false;
+  }
+
+  // Parse a Unicode user-operator-id (-funicode-operators).
+  //
+  //   operator-function-id:                          [U2, U§7]
+  //     operator user-operator
+  //
+  // The token's identity is its code point, not its spelling: go through
+  // Lexer::getUserOperatorCodePoint so that every spelling of the same
+  // operator (glyph or universal-character-name) names one entity.
+  if (getLangOpts().UnicodeOperators && Tok.is(tok::user_operator)) {
+    uint32_t CodePoint = Lexer::getUserOperatorCodePoint(
+        Tok, PP.getSourceManager(), getLangOpts());
+    SourceLocation OpTokLoc = ConsumeToken();
+    Result.setUserOperatorId(CodePoint, KeywordLoc, OpTokLoc);
     return false;
   }
 
@@ -2792,7 +2820,8 @@ bool Parser::ParseUnqualifiedId(CXXScopeSpec &SS, ParsedType ObjectType,
     //     operator-function-id < template-argument-list[opt] >
     TemplateTy Template;
     if ((Result.getKind() == UnqualifiedIdKind::IK_OperatorFunctionId ||
-         Result.getKind() == UnqualifiedIdKind::IK_LiteralOperatorId) &&
+         Result.getKind() == UnqualifiedIdKind::IK_LiteralOperatorId ||
+         Result.getKind() == UnqualifiedIdKind::IK_UserOperatorId) &&
         Tok.is(tok::less))
       return ParseUnqualifiedIdTemplateId(
           SS, ObjectType, ObjectHadErrors,
