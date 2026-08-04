@@ -29,6 +29,7 @@
 #include "clang/Basic/SourceLocation.h"
 #include "llvm/ADT/FoldingSet.h"
 #include "llvm/Support/Compiler.h"
+#include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
@@ -100,6 +101,10 @@ int DeclarationName::compare(DeclarationName LHS, DeclarationName RHS) {
   case DeclarationName::CXXLiteralOperatorName:
     return LHS.getCXXLiteralIdentifier()->getName().compare(
         RHS.getCXXLiteralIdentifier()->getName());
+
+  case DeclarationName::CXXUserOperatorName:
+    return compareInt(LHS.getCXXUserOperatorCodePoint(),
+                      RHS.getCXXUserOperatorCodePoint());
 
   case DeclarationName::CXXUsingDirective:
     return 0;
@@ -181,6 +186,18 @@ void DeclarationName::print(raw_ostream &OS,
     OS << "operator\"\"" << getCXXLiteralIdentifier()->getName();
     return;
 
+  case DeclarationName::CXXUserOperatorName: {
+    // Print the operator's glyph, not its code point: `operator⊞`. The
+    // canonical identity is the scalar value, so this is the one place that
+    // re-encodes it as UTF-8.
+    char Buf[UNI_MAX_UTF8_BYTES_PER_CODE_POINT + 1] = {};
+    char *Ptr = Buf;
+    OS << "operator";
+    if (llvm::ConvertCodePointToUTF8(getCXXUserOperatorCodePoint(), Ptr))
+      OS << StringRef(Buf, Ptr - Buf);
+    return;
+  }
+
   case DeclarationName::CXXConversionFunctionName: {
     OS << "operator ";
     QualType Type = getCXXNameType();
@@ -246,6 +263,8 @@ void *DeclarationName::getFETokenInfoSlow() const {
     return castAsCXXDeductionGuideNameExtra()->FETokenInfo;
   case CXXLiteralOperatorName:
     return castAsCXXLiteralOperatorIdName()->FETokenInfo;
+  case CXXUserOperatorName:
+    return castAsCXXUserOperatorIdName()->FETokenInfo;
   default:
     llvm_unreachable("DeclarationName has no FETokenInfo!");
   }
@@ -268,6 +287,9 @@ void DeclarationName::setFETokenInfoSlow(void *T) {
     break;
   case CXXLiteralOperatorName:
     castAsCXXLiteralOperatorIdName()->FETokenInfo = T;
+    break;
+  case CXXUserOperatorName:
+    castAsCXXUserOperatorIdName()->FETokenInfo = T;
     break;
   default:
     llvm_unreachable("DeclarationName has no FETokenInfo!");
@@ -377,6 +399,19 @@ DeclarationNameTable::getCXXLiteralOperatorName(const IdentifierInfo *II) {
   return DeclarationName(LiteralName);
 }
 
+DeclarationName DeclarationNameTable::getCXXUserOperatorName(uint32_t CP) {
+  llvm::FoldingSetNodeID ID;
+  ID.AddInteger(CP);
+
+  void *InsertPos = nullptr;
+  if (auto *Name = CXXUserOperatorNames.FindNodeOrInsertPos(ID, InsertPos))
+    return DeclarationName(Name);
+
+  auto *UserOpName = new (Ctx) detail::CXXUserOperatorIdName(CP);
+  CXXUserOperatorNames.InsertNode(UserOpName, InsertPos);
+  return DeclarationName(UserOpName);
+}
+
 DeclarationNameLoc::DeclarationNameLoc(DeclarationName Name) {
   switch (Name.getNameKind()) {
   case DeclarationName::Identifier:
@@ -392,6 +427,9 @@ DeclarationNameLoc::DeclarationNameLoc(DeclarationName Name) {
     break;
   case DeclarationName::CXXLiteralOperatorName:
     setCXXLiteralOperatorNameLoc(SourceLocation());
+    break;
+  case DeclarationName::CXXUserOperatorName:
+    setCXXUserOperatorNameLoc(SourceLocation());
     break;
   case DeclarationName::ObjCZeroArgSelector:
   case DeclarationName::ObjCOneArgSelector:
@@ -411,6 +449,7 @@ bool DeclarationNameInfo::containsUnexpandedParameterPack() const {
   case DeclarationName::ObjCMultiArgSelector:
   case DeclarationName::CXXOperatorName:
   case DeclarationName::CXXLiteralOperatorName:
+  case DeclarationName::CXXUserOperatorName:
   case DeclarationName::CXXUsingDirective:
   case DeclarationName::CXXDeductionGuideName:
     return false;
@@ -434,6 +473,7 @@ bool DeclarationNameInfo::isInstantiationDependent() const {
   case DeclarationName::ObjCMultiArgSelector:
   case DeclarationName::CXXOperatorName:
   case DeclarationName::CXXLiteralOperatorName:
+  case DeclarationName::CXXUserOperatorName:
   case DeclarationName::CXXUsingDirective:
   case DeclarationName::CXXDeductionGuideName:
     return false;
@@ -470,6 +510,7 @@ void DeclarationNameInfo::printName(raw_ostream &OS, PrintingPolicy Policy) cons
   case DeclarationName::ObjCMultiArgSelector:
   case DeclarationName::CXXOperatorName:
   case DeclarationName::CXXLiteralOperatorName:
+  case DeclarationName::CXXUserOperatorName:
   case DeclarationName::CXXUsingDirective:
   case DeclarationName::CXXDeductionGuideName:
     Name.print(OS, Policy);
@@ -505,6 +546,9 @@ SourceLocation DeclarationNameInfo::getEndLocPrivate() const {
 
   case DeclarationName::CXXLiteralOperatorName:
     return LocInfo.getCXXLiteralOperatorNameLoc();
+
+  case DeclarationName::CXXUserOperatorName:
+    return LocInfo.getCXXUserOperatorNameLoc();
 
   case DeclarationName::CXXConstructorName:
   case DeclarationName::CXXDestructorName:

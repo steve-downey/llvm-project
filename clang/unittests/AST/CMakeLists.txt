@@ -19,6 +19,7 @@ add_clang_unittest(ASTTests
   CommentTextTest.cpp
   ConceptPrinterTest.cpp
   DataCollectionTest.cpp
+  DeclarationNameTest.cpp
   DeclBaseTest.cpp
   DeclPrinterTest.cpp
   DeclTest.cpp

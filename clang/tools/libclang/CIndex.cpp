@@ -1395,6 +1395,7 @@ bool CursorVisitor::VisitDeclarationNameInfo(DeclarationNameInfo Name) {
   case clang::DeclarationName::CXXLiteralOperatorName:
   case clang::DeclarationName::CXXDeductionGuideName:
   case clang::DeclarationName::CXXOperatorName:
+  case clang::DeclarationName::CXXUserOperatorName:
   case clang::DeclarationName::CXXUsingDirective:
     return false;
 
