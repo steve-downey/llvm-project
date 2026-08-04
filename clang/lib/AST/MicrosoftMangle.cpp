@@ -1363,10 +1363,16 @@ void MicrosoftCXXNameMangler::mangleUnqualifiedName(GlobalDecl GD,
     }
 
     case DeclarationName::CXXUserOperatorName:
-      // U09 decides this; U8 records MSVC mangling as unexamined. Not
-      // reachable before U07 makes such a name declarable.
-      llvm_unreachable("U09: Unicode user operator MSVC mangling not "
-                       "implemented");
+      // U8 / U-design section 9 record the MSVC scheme as *unexamined*: there
+      // is no Microsoft analogue of the Itanium vendor-extended operator
+      // production (`v <digit> <source-name>`, which U09 implements in
+      // ItaniumMangle.cpp), and quietly inventing one here would be a worse
+      // outcome than an honest error -- it would fabricate an ABI nobody
+      // agreed to and hide the open question the paper has to raise. Diagnose
+      // instead, and keep mangling so the user sees every such declaration
+      // rather than only the first.
+      Error(ND->getLocation(), "Unicode user-defined operator");
+      break;
 
     case DeclarationName::CXXDeductionGuideName:
       llvm_unreachable("Can't mangle a deduction guide name!");
