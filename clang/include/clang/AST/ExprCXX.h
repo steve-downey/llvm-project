@@ -368,6 +368,141 @@ public:
   }
 };
 
+/// A use of a Unicode user-defined operator written with operator syntax:
+/// the infix form `LHS <op> RHS` or the prefix form `<op> Operand` (U4, U5).
+///
+/// The node is a transparent wrapper around the *semantic form* -- the
+/// ordinary call the operator use desugars to (U7): a CallExpr calling
+/// `operator<op>` for the non-member form, a CXXMemberCallExpr spelling
+/// `x.operator<op>(y)` for the member form, or the dependent CallExpr through
+/// an UnresolvedLookupExpr when an operand is type-dependent. Type, value
+/// category, dependence, constant evaluation, exception specification and
+/// codegen are all delegated to it, so nothing about the *meaning* of a user
+/// operator lives here.
+///
+/// It exists for two reasons, and only the first is cosmetic.
+///
+///  1. `-ast-print` and every diagnostic that quotes an expression must print
+///     `a <op> b` as written rather than `operator<op>(a, b)` as desugared.
+///
+///  2. **Two-phase lookup needs the operator-ness of the use recorded.** A
+///     bare CallExpr records the operator's *name* but not the fact that
+///     operator syntax was used, so TreeTransform rebuilds it at instantiation
+///     through ActOnCallExpr -- [over.match.call], not [over.match.oper] --
+///     and the member candidates, which are a property of the syntax and not
+///     of the call, are lost. TransformUserOperatorExpr instead recovers the
+///     operands and re-runs Sema::CreateOverloadedUserOp on them. This is
+///     exactly the job CXXOperatorCallExpr does for the existing operators;
+///     that node cannot be reused because it stores an OverloadedOperatorKind,
+///     which a user operator has not got.
+///
+/// The operator is identified by its Unicode scalar value and by nothing
+/// else: no spelling is stored, so a glyph, a universal-character-name and a
+/// `\N{...}` name all produce the same node and all print back as the glyph
+/// (U11).
+///
+/// The operands as written are not stored either; they are recovered from the
+/// semantic form, as CXXRewrittenBinaryOperator recovers its own. That keeps
+/// the node's children a single edge -- the semantic form -- so no operand is
+/// reachable twice, which is what makes the wrapper transparent to every
+/// visitor, profiler and serializer that walks children().
+class UserOperatorExpr final : public Expr {
+  friend class ASTStmtReader;
+
+  /// The call this operator use desugars to.
+  Stmt *SemanticForm;
+
+  /// The Unicode scalar value identifying the operator.
+  uint32_t CodePoint;
+
+  /// The number of operands as written: 2 for infix, 1 for prefix.
+  unsigned NumOperands;
+
+  /// The location of the operator token.
+  SourceLocation OpLoc;
+
+public:
+  UserOperatorExpr(Expr *SemanticForm, uint32_t CodePoint,
+                   unsigned NumOperands, SourceLocation OpLoc)
+      : Expr(UserOperatorExprClass, SemanticForm->getType(),
+             SemanticForm->getValueKind(), SemanticForm->getObjectKind()),
+        SemanticForm(SemanticForm), CodePoint(CodePoint),
+        NumOperands(NumOperands), OpLoc(OpLoc) {
+    assert(CodePoint && "user operator with no code-point identity");
+    assert((NumOperands == 1 || NumOperands == 2) &&
+           "user operators are prefix (1 operand) or infix (2)");
+    setDependence(computeDependence(this));
+  }
+
+  UserOperatorExpr(EmptyShell Empty)
+      : Expr(UserOperatorExprClass, Empty), SemanticForm(), CodePoint(0),
+        NumOperands(2) {}
+
+  /// The call this operator use desugars to.
+  Expr *getSemanticForm() { return cast<Expr>(SemanticForm); }
+  const Expr *getSemanticForm() const { return cast<Expr>(SemanticForm); }
+
+  /// The Unicode scalar value identifying the operator.
+  uint32_t getCodePoint() const { return CodePoint; }
+
+  /// The operator's spelling: the code point encoded as UTF-8. Every spelling
+  /// of a user operator prints back as its glyph.
+  void printOperator(raw_ostream &OS) const;
+
+  unsigned getNumOperands() const { return NumOperands; }
+  bool isInfix() const { return NumOperands == 2; }
+  bool isPrefix() const { return NumOperands == 1; }
+
+  /// The \p I'th operand as written, recovered from the semantic form.
+  /// Returns null only if the semantic form has an unexpected shape.
+  Expr *getOperand(unsigned I) LLVM_READONLY;
+  const Expr *getOperand(unsigned I) const LLVM_READONLY {
+    return const_cast<UserOperatorExpr *>(this)->getOperand(I);
+  }
+
+  Expr *getLHS() { return isInfix() ? getOperand(0) : nullptr; }
+  const Expr *getLHS() const { return isInfix() ? getOperand(0) : nullptr; }
+  Expr *getRHS() { return getOperand(NumOperands - 1); }
+  const Expr *getRHS() const { return getOperand(NumOperands - 1); }
+
+  SourceLocation getOperatorLoc() const LLVM_READONLY { return OpLoc; }
+  SourceLocation getExprLoc() const LLVM_READONLY { return OpLoc; }
+
+  /// The extent of the expression *as written*, which the semantic form does
+  /// not give: BuildCallExpr takes the non-member call's range from its
+  /// synthesized callee, so that CallExpr begins at the operator rather than
+  /// at its own first argument, while the member form's CXXMemberCallExpr
+  /// begins at the object. Computing the range here makes the two forms of
+  /// the same syntax agree.
+  //@{
+  SourceLocation getBeginLoc() const LLVM_READONLY {
+    if (isInfix())
+      if (const Expr *L = getOperand(0))
+        return L->getBeginLoc();
+    return OpLoc;
+  }
+  SourceLocation getEndLoc() const LLVM_READONLY {
+    if (const Expr *R = getOperand(NumOperands - 1))
+      return R->getEndLoc();
+    return getSemanticForm()->getEndLoc();
+  }
+  SourceRange getSourceRange() const LLVM_READONLY {
+    return SourceRange(getBeginLoc(), getEndLoc());
+  }
+  //@}
+
+  child_range children() {
+    return child_range(&SemanticForm, &SemanticForm + 1);
+  }
+  const_child_range children() const {
+    return const_child_range(&SemanticForm, &SemanticForm + 1);
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == UserOperatorExprClass;
+  }
+};
+
 /// Abstract class common to all of the C++ "named"/"keyword" casts.
 ///
 /// This abstract class is inherited by all of the classes

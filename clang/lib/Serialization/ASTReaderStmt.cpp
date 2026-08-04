@@ -742,6 +742,14 @@ void ASTStmtReader::VisitParenExpr(ParenExpr *E) {
   E->setSubExpr(Record.readSubExpr());
 }
 
+void ASTStmtReader::VisitUserOperatorExpr(UserOperatorExpr *E) {
+  VisitExpr(E);
+  E->SemanticForm = Record.readSubExpr();
+  E->CodePoint = Record.readInt();
+  E->NumOperands = Record.readInt();
+  E->OpLoc = Record.readSourceLocation();
+}
+
 void ASTStmtReader::VisitParenListExpr(ParenListExpr *E) {
   VisitExpr(E);
   unsigned NumExprs = Record.readInt();
@@ -3328,6 +3336,10 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
 
     case EXPR_PAREN:
       S = new (Context) ParenExpr(Empty);
+      break;
+
+    case EXPR_USER_OPERATOR:
+      S = new (Context) UserOperatorExpr(Empty);
       break;
 
     case EXPR_PAREN_LIST:

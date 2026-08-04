@@ -32,6 +32,7 @@
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/Specifiers.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <cassert>
 #include <cstddef>
@@ -129,6 +130,37 @@ CXXRewrittenBinaryOperator::getDecomposedForm() const {
   if (isReversed())
     std::swap(Result.LHS, Result.RHS);
   return Result;
+}
+
+Expr *UserOperatorExpr::getOperand(unsigned I) {
+  assert(I < NumOperands && "operand index out of range");
+
+  // Recover the operands as written from the semantic form, rather than
+  // storing a second reference to them: see the class comment.
+  Expr *E = getSemanticForm()->IgnoreImplicit();
+
+  // The member form is `x.operator<op>(y)`: operand 0 is the object argument,
+  // the rest are call arguments. Checked first -- CXXMemberCallExpr is a
+  // CallExpr.
+  if (auto *MC = dyn_cast<CXXMemberCallExpr>(E))
+    return I == 0 ? MC->getImplicitObjectArgument() : MC->getArg(I - 1);
+
+  // The non-member form -- resolved or still dependent -- is
+  // `operator<op>(x, y)`: the operands are the leading arguments. A selected
+  // overload may have default arguments beyond them, which are not operands.
+  if (auto *CE = dyn_cast<CallExpr>(E))
+    return I < CE->getNumArgs() ? CE->getArg(I) : nullptr;
+
+  return nullptr;
+}
+
+void UserOperatorExpr::printOperator(raw_ostream &OS) const {
+  // The code point is the operator's whole identity; no spelling is stored,
+  // so every spelling prints back as the glyph (U11).
+  char Buf[UNI_MAX_UTF8_BYTES_PER_CODE_POINT + 1] = {};
+  char *Ptr = Buf;
+  if (llvm::ConvertCodePointToUTF8(CodePoint, Ptr))
+    OS << StringRef(Buf, Ptr - Buf);
 }
 
 bool CXXTypeidExpr::isPotentiallyEvaluated() const {

@@ -11022,14 +11022,28 @@ public:
   /// user operator does not and cannot have. Candidate assembly here is
   /// [over.match.oper]p3 without its built-in bullet (U6).
   ///
+  /// The result is a UserOperatorExpr wrapping the call the use desugars to,
+  /// so that the operator syntax survives into the AST and is re-run rather
+  /// than flattened when a dependent use is instantiated.
+  ///
   /// \param OpLoc The location of the operator glyph.
   /// \param CodePoint The Unicode scalar value identifying the operator. The
   ///        operator is identified by this and nothing else -- never by a
   ///        spelling, so every spelling of the same operator behaves alike.
+  /// \param Fns The non-member candidates found by unqualified lookup. The
+  ///        caller supplies them because the two callers find them
+  ///        differently: ActOnUserOperator looks the name up in the current
+  ///        scope, while TreeTransform must re-use the *phase-1* set recorded
+  ///        in the dependent expression it is rebuilding.
   /// \param Operands The one or two operands, in source order.
+  /// \param PerformADL Whether the non-member candidates are to be augmented
+  ///        by argument-dependent lookup (U6; false only when rebuilding a
+  ///        use whose callee was already resolved).
   ExprResult CreateOverloadedUserOp(Scope *S, SourceLocation OpLoc,
                                     uint32_t CodePoint,
-                                    MultiExprArg Operands);
+                                    const UnresolvedSetImpl &Fns,
+                                    MultiExprArg Operands,
+                                    bool PerformADL = true);
 
   ExprResult CreateOverloadedArraySubscriptExpr(SourceLocation LLoc,
                                                 SourceLocation RLoc, Expr *Base,

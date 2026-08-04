@@ -111,6 +111,9 @@ public:
   ComplexPairTy VisitParenExpr(ParenExpr *PE) {
     return Visit(PE->getSubExpr());
   }
+  ComplexPairTy VisitUserOperatorExpr(UserOperatorExpr *E) {
+    return Visit(E->getSemanticForm());
+  }
   ComplexPairTy VisitGenericSelectionExpr(GenericSelectionExpr *GE) {
     return Visit(GE->getResultExpr());
   }

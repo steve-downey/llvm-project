@@ -840,6 +840,15 @@ void ASTStmtWriter::VisitParenExpr(ParenExpr *E) {
   Code = serialization::EXPR_PAREN;
 }
 
+void ASTStmtWriter::VisitUserOperatorExpr(UserOperatorExpr *E) {
+  VisitExpr(E);
+  Record.AddStmt(E->getSemanticForm());
+  Record.push_back(E->getCodePoint());
+  Record.push_back(E->getNumOperands());
+  Record.AddSourceLocation(E->getOperatorLoc());
+  Code = serialization::EXPR_USER_OPERATOR;
+}
+
 void ASTStmtWriter::VisitParenListExpr(ParenListExpr *E) {
   VisitExpr(E);
   Record.push_back(E->getNumExprs());

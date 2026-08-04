@@ -165,7 +165,7 @@ public:
 
       if (Traversal == TK_IgnoreUnlessSpelledInSource &&
           isa<LambdaExpr, CXXForRangeStmt, CallExpr,
-              CXXRewrittenBinaryOperator>(S))
+              CXXRewrittenBinaryOperator, UserOperatorExpr>(S))
         return;
 
       for (const Stmt *SubStmt : S->children())
@@ -1006,6 +1006,17 @@ public:
       Visit(Node->getRHS());
     } else {
       ConstStmtVisitor<Derived>::VisitCXXRewrittenBinaryOperator(Node);
+    }
+  }
+
+  void VisitUserOperatorExpr(const UserOperatorExpr *Node) {
+    // As-written traversal shows the operands, not the call the operator use
+    // desugars to -- which is the whole point of the node.
+    if (Traversal == TK_IgnoreUnlessSpelledInSource) {
+      for (unsigned I = 0, N = Node->getNumOperands(); I != N; ++I)
+        Visit(Node->getOperand(I));
+    } else {
+      ConstStmtVisitor<Derived>::VisitUserOperatorExpr(Node);
     }
   }
 

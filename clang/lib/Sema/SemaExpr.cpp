@@ -6768,7 +6768,25 @@ ExprResult Sema::ActOnUserOperator(Scope *S, SourceLocation OpLoc,
   // and 1 for the prefix form.  Candidate assembly, ADL and the desugaring
   // live in CreateOverloadedUserOp (SemaOverload.cpp), beside the machinery
   // they are a sibling of.
-  return CreateOverloadedUserOp(S, OpLoc, CodePoint, Operands);
+  //
+  // The unqualified lookup happens here rather than there because it is the
+  // one part that needs a Scope: this is the phase-1 lookup, and when the
+  // expression is later rebuilt at instantiation TreeTransform re-uses *this*
+  // result rather than looking the name up again in a scope it has not got.
+  // The lookup ignores member functions by construction -- LookupOperatorName
+  // searches Decl::IDNS_NonMemberOperator.
+  DeclarationName OpName =
+      Context.DeclarationNames.getCXXUserOperatorName(CodePoint);
+  DeclarationNameInfo OpNameInfo(OpName, OpLoc);
+  OpNameInfo.setCXXUserOperatorNameLoc(OpLoc);
+  LookupResult Operators(*this, OpNameInfo, LookupOperatorName);
+  LookupName(Operators, S);
+  assert(!Operators.isAmbiguous() && "Operator lookup cannot be ambiguous");
+  UnresolvedSet<8> Fns;
+  Fns.append(Operators.begin(), Operators.end());
+
+  return CreateOverloadedUserOp(S, OpLoc, CodePoint, Fns, Operands,
+                                /*PerformADL=*/true);
 }
 
 ExprResult Sema::ActOnCallExpr(Scope *Scope, Expr *Fn, SourceLocation LParenLoc,

@@ -114,6 +114,9 @@ public:
 
   void VisitStmt(Stmt *S) { CGF.ErrorUnsupported(S, "aggregate expression"); }
   void VisitParenExpr(ParenExpr *PE) { Visit(PE->getSubExpr()); }
+  void VisitUserOperatorExpr(UserOperatorExpr *E) {
+    Visit(E->getSemanticForm());
+  }
   void VisitGenericSelectionExpr(GenericSelectionExpr *GE) {
     Visit(GE->getResultExpr());
   }

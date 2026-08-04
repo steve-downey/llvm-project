@@ -526,6 +526,9 @@ public:
   Value *VisitParenExpr(ParenExpr *PE) {
     return Visit(PE->getSubExpr());
   }
+  Value *VisitUserOperatorExpr(UserOperatorExpr *E) {
+    return Visit(E->getSemanticForm());
+  }
   Value *VisitSubstNonTypeTemplateParmExpr(SubstNonTypeTemplateParmExpr *E) {
     return Visit(E->getReplacement());
   }

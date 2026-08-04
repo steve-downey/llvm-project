@@ -1144,6 +1144,9 @@ CanThrowResult Sema::canThrow(const Stmt *S) {
     //   - a potentially evaluated call to a function, member function, function
     //     pointer, or member function pointer that does not have a non-throwing
     //     exception-specification
+  case Expr::UserOperatorExprClass:
+    return canThrow(cast<UserOperatorExpr>(S)->getSemanticForm());
+
   case Expr::CallExprClass:
   case Expr::CXXMemberCallExprClass:
   case Expr::CXXOperatorCallExprClass:

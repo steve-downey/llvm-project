@@ -1663,6 +1663,9 @@ enum StmtCode {
   /// A ParenExpr record.
   EXPR_PAREN,
 
+  /// A UserOperatorExpr record.
+  EXPR_USER_OPERATOR,
+
   /// A ParenListExpr record.
   EXPR_PAREN_LIST,
 

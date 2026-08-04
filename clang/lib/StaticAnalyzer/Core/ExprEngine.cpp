@@ -1910,6 +1910,11 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::AsTypeExprClass:
     case Stmt::ConceptSpecializationExprClass:
     case Stmt::CXXRewrittenBinaryOperatorClass:
+    // A UserOperatorExpr is a transparent wrapper around the call its operator
+    // use desugars to, and gets the same treatment as the one upstream
+    // wrapper of the same shape, CXXRewrittenBinaryOperator: the inner call is
+    // its own CFG element and is modelled; the wrapper itself is not.
+    case Stmt::UserOperatorExprClass:
     case Stmt::RequiresExprClass:
     case Stmt::EmbedExprClass:
       // Fall through.

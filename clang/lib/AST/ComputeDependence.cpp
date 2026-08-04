@@ -282,6 +282,10 @@ ExprDependence clang::computeDependence(CXXRewrittenBinaryOperator *E) {
   return E->getSemanticForm()->getDependence();
 }
 
+ExprDependence clang::computeDependence(UserOperatorExpr *E) {
+  return E->getSemanticForm()->getDependence();
+}
+
 ExprDependence clang::computeDependence(CXXStdInitializerListExpr *E) {
   auto D = turnTypeToValueDependence(E->getSubExpr()->getDependence());
   D |= toExprDependenceForImpliedType(E->getType()->getDependence());

@@ -1178,6 +1178,9 @@ public:
   const Expr *VisitParenExpr(const ParenExpr *E) {
     return Visit(E->getSubExpr());
   }
+  const Expr *VisitUserOperatorExpr(const UserOperatorExpr *E) {
+    return Visit(E->getSemanticForm());
+  }
   const Expr *VisitUnaryAddrOf(const UnaryOperator *E) {
     return Visit(E->getSubExpr());
   }
@@ -1790,6 +1793,9 @@ LValue CodeGenFunction::EmitLValueHelper(const Expr *E,
   }
   case Expr::ParenExprClass:
     return EmitLValue(cast<ParenExpr>(E)->getSubExpr(), IsKnownNonNull);
+  case Expr::UserOperatorExprClass:
+    return EmitLValue(cast<UserOperatorExpr>(E)->getSemanticForm(),
+                      IsKnownNonNull);
   case Expr::GenericSelectionExprClass:
     return EmitLValue(cast<GenericSelectionExpr>(E)->getResultExpr(),
                       IsKnownNonNull);
@@ -3303,6 +3309,11 @@ static void setObjCGCLValueClass(const ASTContext &Ctx, const Expr *E,
 
   if (const auto *Exp = dyn_cast<UnaryOperator>(E)) {
     setObjCGCLValueClass(Ctx, Exp->getSubExpr(), LV, IsMemberAccess);
+    return;
+  }
+
+  if (const auto *Exp = dyn_cast<UserOperatorExpr>(E)) {
+    setObjCGCLValueClass(Ctx, Exp->getSemanticForm(), LV, IsMemberAccess);
     return;
   }
 
@@ -4888,6 +4899,9 @@ struct StructFieldAccess
   }
   const Expr *VisitParenExpr(const ParenExpr *E) {
     return Visit(E->getSubExpr());
+  }
+  const Expr *VisitUserOperatorExpr(const UserOperatorExpr *E) {
+    return Visit(E->getSemanticForm());
   }
 };
 
