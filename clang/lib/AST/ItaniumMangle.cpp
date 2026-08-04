@@ -5757,6 +5757,12 @@ recurse:
     E = cast<BacktickInfixExpr>(E)->getSubExpr();
     goto recurse;
 
+  case Expr::UserOperatorExprClass:
+    // The wrapper is not manglable itself; a user operator use mangles as
+    // the call it desugars to, which is exactly U7's desugaring.
+    E = cast<UserOperatorExpr>(E)->getSemanticForm();
+    goto recurse;
+
   case Expr::ConceptSpecializationExprClass: {
     auto *CSE = cast<ConceptSpecializationExpr>(E);
     if (isCompatibleWith(LangOptions::ClangABI::Ver17)) {

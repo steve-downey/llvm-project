@@ -1517,6 +1517,13 @@ void StmtProfiler::VisitBacktickInfixExpr(const BacktickInfixExpr *S) {
   VisitExpr(S);
 }
 
+void StmtProfiler::VisitUserOperatorExpr(const UserOperatorExpr *S) {
+  VisitExpr(S);
+  // Two uses of *different* operators must not profile equal even when
+  // their semantic forms happen to match, so the identity goes in too.
+  ID.AddInteger(S->getCodePoint());
+}
+
 void StmtProfiler::VisitParenListExpr(const ParenListExpr *S) {
   VisitExpr(S);
 }

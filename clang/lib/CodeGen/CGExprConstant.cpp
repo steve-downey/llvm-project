@@ -1205,6 +1205,11 @@ public:
     return Visit(E->getSubExpr(), T);
   }
 
+  llvm::Constant *VisitUserOperatorExpr(const UserOperatorExpr *E,
+                                        QualType T) {
+    return Visit(E->getSemanticForm(), T);
+  }
+
   llvm::Constant *
   VisitSubstNonTypeTemplateParmExpr(const SubstNonTypeTemplateParmExpr *PE,
                                     QualType T) {

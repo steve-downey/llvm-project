@@ -15535,25 +15535,31 @@ void Sema::LookupOverloadedBinOp(OverloadCandidateSet &CandidateSet,
 ///     one.
 ExprResult Sema::CreateOverloadedUserOp(Scope *S, SourceLocation OpLoc,
                                         uint32_t CodePoint,
-                                        MultiExprArg Operands) {
+                                        const UnresolvedSetImpl &Fns,
+                                        MultiExprArg Operands,
+                                        bool PerformADL) {
   assert(CodePoint && "user operator with no code-point identity");
   assert((Operands.size() == 1 || Operands.size() == 2) &&
          "user operators are prefix (1 operand) or infix (2)");
 
   SourceLocation EndLoc = Operands.back()->getEndLoc();
+  unsigned Arity = Operands.size();
   DeclarationName OpName =
       Context.DeclarationNames.getCXXUserOperatorName(CodePoint);
   DeclarationNameInfo OpNameInfo(OpName, OpLoc);
   OpNameInfo.setCXXUserOperatorNameLoc(OpLoc);
 
-  // The non-member half: unqualified operator lookup, which by definition
-  // ignores member functions (LookupOperatorName searches
-  // Decl::IDNS_NonMemberOperator).
-  LookupResult Operators(*this, OpNameInfo, LookupOperatorName);
-  LookupName(Operators, S);
-  assert(!Operators.isAmbiguous() && "Operator lookup cannot be ambiguous");
-  UnresolvedSet<8> Fns;
-  Fns.append(Operators.begin(), Operators.end());
+  // Every successful result is wrapped, so that the AST records that operator
+  // syntax was used and not merely which function it named. Without that,
+  // TreeTransform rebuilds a dependent use as an ordinary call and the member
+  // candidates -- a property of the syntax, not of the call -- are lost. See
+  // UserOperatorExpr.
+  auto Wrap = [&](ExprResult Semantic) -> ExprResult {
+    if (Semantic.isInvalid())
+      return ExprError();
+    return new (Context)
+        UserOperatorExpr(Semantic.get(), CodePoint, Arity, OpLoc);
+  };
 
   // Build the non-member form as an ordinary call through an *unresolved*
   // callee. Keeping the callee unresolved is what makes ADL happen inside
@@ -15563,7 +15569,7 @@ ExprResult Sema::CreateOverloadedUserOp(Scope *S, SourceLocation OpLoc,
   auto BuildNonMemberForm = [&]() -> ExprResult {
     ExprResult Fn = CreateUnresolvedLookupExpr(
         /*NamingClass=*/nullptr, NestedNameSpecifierLoc(), OpNameInfo, Fns,
-        /*PerformADL=*/true);
+        PerformADL);
     if (Fn.isInvalid())
       return ExprError();
     return BuildCallExpr(S, Fn.get(), OpLoc, Operands, EndLoc);
@@ -15573,14 +15579,13 @@ ExprResult Sema::CreateOverloadedUserOp(Scope *S, SourceLocation OpLoc,
   // ordinary two-phase machinery re-resolve it at instantiation, performing
   // ADL from the instantiation context. This is inherited, not reimplemented.
   //
-  // FIXME(U16): a dependent *member* user operator is lost this way, because
-  // the rebuilt expression is an ordinary CallExpr and TreeTransform has no
-  // way to know the operator syntax was used. Recording that in a dedicated
-  // AST node -- which is what CXXOperatorCallExpr does for the existing
-  // operators -- is U16's job and closes this hole.
+  // The wrapper is what makes the *member* half survive that round trip:
+  // TransformUserOperatorExpr recovers the operands from this call and calls
+  // back into this function, so instantiation redoes candidate assembly for
+  // an operator rather than for a call.
   for (Expr *E : Operands)
     if (E->isTypeDependent())
-      return BuildNonMemberForm();
+      return Wrap(BuildNonMemberForm());
 
   for (Expr *&E : Operands)
     if (checkPlaceholderForOverload(*this, E))
@@ -15607,7 +15612,7 @@ ExprResult Sema::CreateOverloadedUserOp(Scope *S, SourceLocation OpLoc,
   // that the call path adds no built-in candidates either; the no-built-ins
   // rule holds on both sides of this branch.
   if (MemberCands.empty())
-    return BuildNonMemberForm();
+    return Wrap(BuildNonMemberForm());
 
   OverloadCandidateSet CandidateSet(OpLoc, OverloadCandidateSet::CSK_Operator);
   ArrayRef<Expr *> Args = Operands;
@@ -15640,7 +15645,7 @@ ExprResult Sema::CreateOverloadedUserOp(Scope *S, SourceLocation OpLoc,
       // A non-member won the unified set, so it also wins the non-member set
       // on its own; the ordinary call path selects the same function and
       // builds the same call.
-      return BuildNonMemberForm();
+      return Wrap(BuildNonMemberForm());
     }
 
     // Member form. The desugaring is literally `x.operator<op>(y)`, so build
@@ -15658,7 +15663,8 @@ ExprResult Sema::CreateOverloadedUserOp(Scope *S, SourceLocation OpLoc,
         Found, /*TemplateArgs=*/nullptr, S);
     if (Base.isInvalid())
       return ExprError();
-    return BuildCallExpr(S, Base.get(), OpLoc, Operands.drop_front(), EndLoc);
+    return Wrap(
+        BuildCallExpr(S, Base.get(), OpLoc, Operands.drop_front(), EndLoc));
   }
 
   case OR_No_Viable_Function:

@@ -114,6 +114,9 @@ public:
   ComplexPairTy VisitBacktickInfixExpr(BacktickInfixExpr *E) {
     return Visit(E->getSubExpr());
   }
+  ComplexPairTy VisitUserOperatorExpr(UserOperatorExpr *E) {
+    return Visit(E->getSemanticForm());
+  }
   ComplexPairTy VisitGenericSelectionExpr(GenericSelectionExpr *GE) {
     return Visit(GE->getResultExpr());
   }

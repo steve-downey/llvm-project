@@ -328,26 +328,36 @@ template <class T> constexpr bool has_op(...) { return false; }
 static_assert(has_op<Dep::E2>(0));
 static_assert(!has_op<Base>(0));
 
-// A dependent operand with a *member* operator is the one shape that does not
-// work yet, and the reason is structural: the dependent expression is an
-// ordinary CallExpr whose callee carries the operator's name but not the fact
-// that operator syntax was used, so TreeTransform rebuilds it as a plain call
-// at instantiation and the member candidates are never assembled. Recording the
-// operator syntax in the AST -- which is exactly what CXXOperatorCallExpr does
-// for the existing operators -- is U16's job, and closes this.
+// A dependent operand with a *member* operator was the one shape that did not
+// work when U13 landed, and the reason was structural: the dependent
+// expression was an ordinary CallExpr whose callee carried the operator's name
+// but not the fact that operator syntax was used, so TreeTransform rebuilt it
+// as a plain call at instantiation -- [over.match.call], not
+// [over.match.oper] -- and the member candidates were never assembled. ADL
+// survived, because ADL is a property of the call; member candidates did not,
+// because they are a property of the operator syntax.
 //
-// Pinned here so that U16 cannot land without noticing: when these two stop
-// failing, drop the -verify directives below and assert 12 and satisfaction.
-// FIXME(U16): dependent member user operators.
-template <class T> constexpr auto dependent_member(T a, T b) {
-  return a ⊕ b;
-  // expected-error@-1 {{use of undeclared 'operator⊕'}}
-}
+// U16 closed it by recording the operator syntax in the AST (UserOperatorExpr,
+// the analogue of what CXXOperatorCallExpr does for the existing operators);
+// TransformUserOperatorExpr recovers the operands and re-runs
+// CreateOverloadedUserOp on them. These two assertions were the pinned
+// failures, and they are the regression test for that.
+template <class T> constexpr auto dependent_member(T a, T b) { return a ⊕ b; }
 static_assert(dependent_member(Mem{1}, Mem{2}) == 12);
-// expected-note@-1 {{in instantiation of function template specialization 'dependent_member<Mem>' requested here}}
 
 template <class T> concept MemberCombinable = requires(T a, T b) { a ⊕ b; };
-static_assert(!MemberCombinable<Mem>);  // FIXME(U16): should be satisfied
+static_assert(MemberCombinable<Mem>);
+static_assert(!MemberCombinable<int>);
+
+// Member and non-member candidates are still ranked in *one* set when the
+// operands are dependent, both ways round -- the observable that distinguishes
+// this from a member-first fallback, now asserted at instantiation as well as
+// at parse time.
+template <class T, class U> constexpr auto dependent_ranked(T a, U b) {
+  return a ⊘ b;
+}
+static_assert(dependent_ranked(MN{}, 0).value == 54);   // non-member
+static_assert(dependent_ranked(MN{}, 0L).value == 53);  // member
 
 //===--------------------------------------------------------------------===//
 // 6. Composability with -fbacktick (U7)

@@ -529,6 +529,9 @@ public:
   Value *VisitBacktickInfixExpr(BacktickInfixExpr *E) {
     return Visit(E->getSubExpr());
   }
+  Value *VisitUserOperatorExpr(UserOperatorExpr *E) {
+    return Visit(E->getSemanticForm());
+  }
   Value *VisitSubstNonTypeTemplateParmExpr(SubstNonTypeTemplateParmExpr *E) {
     return Visit(E->getReplacement());
   }

@@ -1147,6 +1147,9 @@ CanThrowResult Sema::canThrow(const Stmt *S) {
   case Expr::BacktickInfixExprClass:
     return canThrow(cast<BacktickInfixExpr>(S)->getSubExpr());
 
+  case Expr::UserOperatorExprClass:
+    return canThrow(cast<UserOperatorExpr>(S)->getSemanticForm());
+
   case Expr::CallExprClass:
   case Expr::CXXMemberCallExprClass:
   case Expr::CXXOperatorCallExprClass:

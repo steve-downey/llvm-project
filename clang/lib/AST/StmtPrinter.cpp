@@ -2220,6 +2220,23 @@ void StmtPrinter::VisitCXXRewrittenBinaryOperator(
   PrintExpr(const_cast<Expr*>(Decomposed.RHS));
 }
 
+void StmtPrinter::VisitUserOperatorExpr(UserOperatorExpr *Node) {
+  // Print the operator use as written, not as the call it desugars to. The
+  // glyph is regenerated from the stored code point, so a use spelled with a
+  // universal-character-name prints back as the glyph -- the code point is
+  // the operator's whole identity and no spelling is kept (U11).
+  if (Node->isInfix()) {
+    PrintExpr(Node->getOperand(0));
+    OS << ' ';
+    Node->printOperator(OS);
+    OS << ' ';
+    PrintExpr(Node->getOperand(1));
+    return;
+  }
+  Node->printOperator(OS);
+  PrintExpr(Node->getOperand(0));
+}
+
 void StmtPrinter::VisitCXXNamedCastExpr(CXXNamedCastExpr *Node) {
   OS << Node->getCastName() << '<';
   Node->getTypeAsWritten().print(OS, Policy);

@@ -24,6 +24,7 @@
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/Specifiers.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Frontend/HLSL/HLSLRootSignature.h"
 
 #include <algorithm>
@@ -1711,6 +1712,13 @@ void TextNodeDumper::VisitInitListExpr(const InitListExpr *ILE) {
 void TextNodeDumper::VisitGenericSelectionExpr(const GenericSelectionExpr *E) {
   if (E->isResultDependent())
     OS << " result_dependent";
+}
+
+void TextNodeDumper::VisitUserOperatorExpr(const UserOperatorExpr *Node) {
+  OS << " " << (Node->isInfix() ? "infix" : "prefix") << " '";
+  Node->printOperator(OS);
+  OS << "' U+"
+     << llvm::format_hex_no_prefix(Node->getCodePoint(), 4, /*Upper=*/true);
 }
 
 void TextNodeDumper::VisitUnaryOperator(const UnaryOperator *Node) {
