@@ -7557,6 +7557,15 @@ public:
                                    SourceLocation CloseLoc, Expr *LHS,
                                    Expr *RHS);
 
+  /// Build a use of a Unicode user-defined operator: the infix form
+  /// `LHS <op> RHS` (two operands) or the prefix form `<op> RHS` (one
+  /// operand).  The operator is identified only by its Unicode scalar value
+  /// \p CodePoint -- never by a spelling and never by an already-resolved
+  /// declaration -- so every spelling of the same operator behaves alike and
+  /// the callee stays unresolved until candidate assembly happens here.
+  ExprResult ActOnUserOperator(Scope *S, SourceLocation OpLoc,
+                               uint32_t CodePoint, MultiExprArg Operands);
+
   /// ActOnCallExpr - Handle a call to Fn with the specified array of arguments.
   /// This provides the location of the left/right parens and a list of comma
   /// locations.
