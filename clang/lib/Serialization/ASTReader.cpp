@@ -1343,10 +1343,12 @@ DeclarationNameKey::DeclarationNameKey(DeclarationName Name)
     Data = 0;
     break;
   case DeclarationName::CXXUserOperatorName:
-    // U17: Data would be the code point; the key encoding and hash below must
-    // be decided together. Not reachable before U07.
-    llvm_unreachable("U17: Unicode user operator name serialization not "
-                     "implemented");
+    // The code point is the name's whole identity and is context-independent,
+    // so unlike the identifier- and selector-keyed kinds it is stored
+    // directly rather than as a pointer to be remapped. Keep this in step
+    // with getHash(), ReadKeyBase() and the writer's EmitKey* pair.
+    Data = Name.getCXXUserOperatorCodePoint();
+    break;
   }
 }
 
@@ -1374,9 +1376,8 @@ unsigned DeclarationNameKey::getHash() const {
   case DeclarationName::CXXUsingDirective:
     break;
   case DeclarationName::CXXUserOperatorName:
-    // See DeclarationNameKey's constructor; U17.
-    llvm_unreachable("U17: Unicode user operator name serialization not "
-                     "implemented");
+    ID.AddInteger((uint32_t)Data);
+    break;
   }
 
   return ID.computeStableHash();
@@ -1427,9 +1428,8 @@ ASTDeclContextNameLookupTraitBase::ReadKeyBase(const unsigned char *&d) {
     Data = 0;
     break;
   case DeclarationName::CXXUserOperatorName:
-    // See DeclarationNameKey's constructor; U17.
-    llvm_unreachable("U17: Unicode user operator name serialization not "
-                     "implemented");
+    Data = endian::readNext<uint32_t, llvm::endianness::little>(d);
+    break;
   }
 
   return DeclarationNameKey(Kind, Data);

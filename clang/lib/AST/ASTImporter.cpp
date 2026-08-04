@@ -656,6 +656,7 @@ namespace clang {
     ExpectedStmt VisitConditionalOperator(ConditionalOperator *E);
     ExpectedStmt VisitBinaryConditionalOperator(BinaryConditionalOperator *E);
     ExpectedStmt VisitCXXRewrittenBinaryOperator(CXXRewrittenBinaryOperator *E);
+    ExpectedStmt VisitUserOperatorExpr(UserOperatorExpr *E);
     ExpectedStmt VisitOpaqueValueExpr(OpaqueValueExpr *E);
     ExpectedStmt VisitArrayTypeTraitExpr(ArrayTypeTraitExpr *E);
     ExpectedStmt VisitExpressionTraitExpr(ExpressionTraitExpr *E);
@@ -8305,6 +8306,20 @@ ExpectedStmt ASTNodeImporter::VisitCXXRewrittenBinaryOperator(
 
   return new (Importer.getToContext())
       CXXRewrittenBinaryOperator(ToSemanticForm, E->isReversed());
+}
+
+ExpectedStmt ASTNodeImporter::VisitUserOperatorExpr(UserOperatorExpr *E) {
+  Error Err = Error::success();
+  auto ToSemanticForm = importChecked(Err, E->getSemanticForm());
+  auto ToOperatorLoc = importChecked(Err, E->getOperatorLoc());
+  if (Err)
+    return std::move(Err);
+
+  // The code point is the operator's whole identity and is context-
+  // independent, so it is carried across unchanged; only the semantic form
+  // and the operator's location need importing.
+  return new (Importer.getToContext()) UserOperatorExpr(
+      ToSemanticForm, E->getCodePoint(), E->getNumOperands(), ToOperatorLoc);
 }
 
 ExpectedStmt ASTNodeImporter::VisitArrayTypeTraitExpr(ArrayTypeTraitExpr *E) {
