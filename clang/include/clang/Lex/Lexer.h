@@ -389,6 +389,13 @@ public:
   /// Everything downstream (operator-function-id, DeclarationName, mangling)
   /// asks for the scalar value here rather than reading a token field.
   ///
+  /// This is where the extended-character = UCN equivalence (U11) is made
+  /// true for operators: \c "⊕" (three UTF-8 bytes), \c "\\u2295",
+  /// \c "\\U00002295", \c "\\u{2295}" and \c "\\N{CIRCLED PLUS}" all decode to
+  /// U+2295, so every spelling of an operator names one entity everywhere
+  /// downstream. No normalization is applied (U§8): the answer is the scalar
+  /// value the spelling designates, never a mapped one.
+  ///
   /// \returns the code point, or 0 if \p Spelling is not exactly one decodable
   /// code point.
   static uint32_t getUserOperatorCodePoint(StringRef Spelling);
@@ -848,6 +855,25 @@ private:
   /// \return \c true if a UTF-8 sequence mapping to an acceptable identifier
   ///         character was lexed, \c false otherwise.
   bool tryConsumeIdentifierUTF8Char(const char *&CurPtr, Token &Result);
+
+  /// The single classification point for the frozen U1 user-operator set
+  /// (-funicode-operators, U11 / U§8).
+  ///
+  /// Every spelling reaches the range table through here: the direct UTF-8
+  /// decode in LexTokenInternal's non-ASCII case, the universal-character-name
+  /// decode in its '\\' case (including the C++23 \\N{...} named form), and the
+  /// two identifier-continuation paths that must *stop* at an operator rather
+  /// than absorb it. There is exactly one table search and one flag test in the
+  /// lexer, so "a UCN designating a U1 code point is that operator token"
+  /// cannot drift away from "a literal glyph is that operator token".
+  bool isUserOperatorCodePoint(uint32_t CodePoint) const;
+
+  /// Form a tok::user_operator token ending at \p CurPtr. The caller has
+  /// already decoded the code point and classified it with
+  /// isUserOperatorCodePoint; the token carries no payload, so the spelling
+  /// (glyph or UCN) is all that is recorded and
+  /// Lexer::getUserOperatorCodePoint decodes it back on demand.
+  bool LexUserOperator(Token &Result, const char *CurPtr);
 };
 
 } // namespace clang

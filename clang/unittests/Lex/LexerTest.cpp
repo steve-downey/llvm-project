@@ -962,4 +962,122 @@ TEST_F(LexerTest, UnicodeOperatorCodePointFromSpelling) {
   EXPECT_EQ(0u, Lexer::getUserOperatorCodePoint("\xE2\x8A"));
 }
 
+// U04: a universal-character-name designating a U1 code point *is* that
+// operator token (U11).  The decisive property is not that the UCN lexes but
+// that it collapses to the same scalar value the glyph does -- the code point
+// is the operator's identity everywhere downstream (DeclarationName, mangling,
+// printing, serialization), so a UCN that lexed to a *different* identity
+// would look perfectly correct under -dump-tokens and be wrong everywhere
+// else.  These cases assert the identity, not the token kind.
+TEST_F(LexerTest, UnicodeOperatorCodePointFromUCNSpelling) {
+  // Every spelling the lexer can produce outside a literal, and each one
+  // answers with the scalar value it designates -- no normalization (U§8).
+  EXPECT_EQ(0x229Eu, Lexer::getUserOperatorCodePoint("\\u229E"));
+  EXPECT_EQ(0x229Eu, Lexer::getUserOperatorCodePoint("\\U0000229E"));
+  EXPECT_EQ(0x229Eu, Lexer::getUserOperatorCodePoint("\\u{229E}"));
+  EXPECT_EQ(0x229Eu, Lexer::getUserOperatorCodePoint("\\N{SQUARED PLUS}"));
+  EXPECT_EQ(0x2297u, Lexer::getUserOperatorCodePoint("\\N{CIRCLED TIMES}"));
+  // Loose matching, in the same strict-then-loose order tryReadNamedUCN uses
+  // (it diagnoses a loose match and recovers to it), so the lexer and this
+  // decode cannot disagree about which name is which code point.
+  EXPECT_EQ(0x229Eu, Lexer::getUserOperatorCodePoint("\\N{squared plus}"));
+  // Lowercase hex, and a code point outside the BMP (not a U1 member, but the
+  // decode must not be BMP-limited).
+  EXPECT_EQ(0x229Eu, Lexer::getUserOperatorCodePoint("\\u229e"));
+  EXPECT_EQ(0x1D400u, Lexer::getUserOperatorCodePoint("\\U0001D400"));
+
+  // Still total: malformed spellings answer 0 rather than aborting, so a
+  // caller may hand this an unvalidated string (clang::expandUCNs may not).
+  EXPECT_EQ(0u, Lexer::getUserOperatorCodePoint("\\"));
+  EXPECT_EQ(0u, Lexer::getUserOperatorCodePoint("\\u"));
+  EXPECT_EQ(0u, Lexer::getUserOperatorCodePoint("\\u22"));
+  EXPECT_EQ(0u, Lexer::getUserOperatorCodePoint("\\u229EX"));
+  EXPECT_EQ(0u, Lexer::getUserOperatorCodePoint("\\U229E"));
+  EXPECT_EQ(0u, Lexer::getUserOperatorCodePoint("\\u{}"));
+  EXPECT_EQ(0u, Lexer::getUserOperatorCodePoint("\\u{229E"));
+  EXPECT_EQ(0u, Lexer::getUserOperatorCodePoint("\\u{ZZZ}"));
+  EXPECT_EQ(0u, Lexer::getUserOperatorCodePoint("\\N{NOT A CHARACTER NAME}"));
+  EXPECT_EQ(0u, Lexer::getUserOperatorCodePoint("\\N{SQUARED PLUS"));
+  EXPECT_EQ(0u, Lexer::getUserOperatorCodePoint("\\x229E"));
+  // Surrogates and out-of-range values are not scalar values.
+  EXPECT_EQ(0u, Lexer::getUserOperatorCodePoint("\\uD800"));
+  EXPECT_EQ(0u, Lexer::getUserOperatorCodePoint("\\U00110000"));
+}
+
+TEST_F(LexerTest, UnicodeOperatorUCNSpellingsAreOneOperator) {
+  LangOpts.CPlusPlus = true;
+  LangOpts.CPlusPlus23 = true;
+  LangOpts.UnicodeOperators = true;
+
+  // Four spellings of U+229E, one identity.  The glyph is included so the
+  // comparison is against the thing the UCN has to equal, not against a
+  // constant this test wrote down.
+  for (StringRef Source :
+       {"a \xE2\x8A\x9E b", "a \\u229E b", "a \\U0000229E b",
+        "a \\u{229E} b", "a \\N{SQUARED PLUS} b"}) {
+    std::vector<Token> Toks = CheckLex(
+        Source, {tok::identifier, tok::user_operator, tok::identifier});
+    ASSERT_EQ(3u, Toks.size()) << Source;
+    EXPECT_EQ(0x229Eu,
+              Lexer::getUserOperatorCodePoint(Toks[1], SourceMgr, LangOpts))
+        << Source;
+    SourceMgr.clearIDTables();
+  }
+}
+
+TEST_F(LexerTest, UnicodeOperatorUCNAdjacency) {
+  LangOpts.CPlusPlus = true;
+  LangOpts.CPlusPlus23 = true;
+  LangOpts.UnicodeOperators = true;
+
+  // The trap this case exists for: the identifier-continuation path rejects a
+  // U1 code point for *classification* and then consumes it anyway "for
+  // recovery purposes", so without the early return in
+  // tryConsumeIdentifierUCN the whole of `a⊞b` would be one identifier.
+  // -dump-tokens cannot see this -- it runs with isPreprocessedOutput() set,
+  // which disables that recovery -- so the assertion has to be made here,
+  // under an ordinary Preprocessor.
+  for (StringRef Source : {"a\\u229E"
+                           "b",
+                           "a\\U0000229E"
+                           "b",
+                           "a\\N{SQUARED PLUS}b"}) {
+    std::vector<Token> Toks = CheckLex(
+        Source, {tok::identifier, tok::user_operator, tok::identifier});
+    ASSERT_EQ(3u, Toks.size()) << Source;
+    EXPECT_EQ(0x229Eu,
+              Lexer::getUserOperatorCodePoint(Toks[1], SourceMgr, LangOpts))
+        << Source;
+    SourceMgr.clearIDTables();
+  }
+}
+
+TEST_F(LexerTest, UnicodeOperatorUCNRequiresTheFlag) {
+  LangOpts.CPlusPlus = true;
+  LangOpts.CPlusPlus23 = true;
+  LangOpts.UnicodeOperators = false;
+
+  for (StringRef Source : {"a \\u229E b", "a \\N{SQUARED PLUS} b"}) {
+    for (const Token &Tok : Lex(Source))
+      EXPECT_FALSE(Tok.is(tok::user_operator)) << Source;
+    SourceMgr.clearIDTables();
+  }
+}
+
+TEST_F(LexerTest, UnicodeOperatorUCNOfExcludedCodePointIsNotAToken) {
+  LangOpts.CPlusPlus = true;
+  LangOpts.CPlusPlus23 = true;
+  LangOpts.UnicodeOperators = true;
+
+  // U+2212 MINUS SIGN is a named exclusion (confusable with '-').  Spelling it
+  // as a UCN must not be a way in: the exclusion is a property of the code
+  // point, and the UCN path asks the same classification helper the glyph path
+  // asks.  U05 gives it a better diagnostic; U04 only has to keep it out.
+  for (StringRef Source : {"a \\u2212 b", "a \\N{MINUS SIGN} b"}) {
+    for (const Token &Tok : Lex(Source))
+      EXPECT_FALSE(Tok.is(tok::user_operator)) << Source;
+    SourceMgr.clearIDTables();
+  }
+}
+
 } // anonymous namespace

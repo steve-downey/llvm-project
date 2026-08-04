@@ -4063,10 +4063,15 @@ defm reflection : BoolFOption<"reflection",
   PosFlag<SetTrue, [], [CC1Option],
           "Enable C++26 reflection">,
   NegFlag<SetFalse>>, ShouldParseIf<cplusplus.KeyPath>;
+// -funicode-operators is a C++-only grammar extension: C has no `operator`
+// keyword, so the token has no production it could appear in.  Without
+// ShouldParseIf the flag still changed C *tokenization* -- it suppressed the
+// accurate stray-character diagnostic and left only the recovery one.
 defm unicode_operators : BoolFOption<"unicode-operators",
   LangOpts<"UnicodeOperators">, DefaultFalse,
   PosFlag<SetTrue, [], [], "Enable Unicode user-defined operators">,
-  NegFlag<SetFalse>, BothFlags<[], [ClangOption, CC1Option]>>;
+  NegFlag<SetFalse>, BothFlags<[], [ClangOption, CC1Option]>>,
+  ShouldParseIf<cplusplus.KeyPath>;
 defm sized_deallocation : BoolFOption<"sized-deallocation",
   LangOpts<"SizedDeallocation">, Default<cpp14.KeyPath>,
   PosFlag<SetTrue, [], [], "Enable C++14 sized global deallocation functions">,
