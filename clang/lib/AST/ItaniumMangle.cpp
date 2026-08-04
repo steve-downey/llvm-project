@@ -1696,6 +1696,13 @@ void CXXNameMangler::mangleUnqualifiedName(
     mangleDestructorName(cast<CXXDestructorDecl>(ND), AdditionalAbiTags);
     break;
 
+  // U09: a user-defined operator's mangled arity is its operand count --
+  // getNumParams() plus the implicit object parameter for a member -- which is
+  // exactly the computation CXXOperatorName already needs, so the two share
+  // it. Before U09 this case sat *below* the fallthrough and so reached
+  // mangleOperatorName with UnknownArity; a member infix operator (one
+  // declared parameter, arity 2) is where that showed.
+  case DeclarationName::CXXUserOperatorName:
   case DeclarationName::CXXOperatorName:
     if (ND && Arity == UnknownArity) {
       Arity = cast<FunctionDecl>(ND)->getNumParams();
@@ -1708,7 +1715,6 @@ void CXXNameMangler::mangleUnqualifiedName(
     [[fallthrough]];
   case DeclarationName::CXXConversionFunctionName:
   case DeclarationName::CXXLiteralOperatorName:
-  case DeclarationName::CXXUserOperatorName:
     mangleOperatorName(Name, Arity);
     writeAbiTags(ND, AdditionalAbiTags);
     break;
@@ -2659,12 +2665,60 @@ void CXXNameMangler::mangleOperatorName(DeclarationName Name, unsigned Arity) {
     mangleOperatorName(Name.getCXXOverloadedOperator(), Arity);
     break;
 
-  case DeclarationName::CXXUserOperatorName:
-    // U09 fills this in: the Itanium vendor-extended operator production,
-    // <operator-name> ::= v <digit> <source-name>, with a code-point-derived
-    // source-name (U8 / U-design section 9). Not reachable before U07 makes
-    // such a name declarable.
-    llvm_unreachable("U09: Unicode user operator mangling not implemented");
+  case DeclarationName::CXXUserOperatorName: {
+    // <operator-name> ::= v <digit> <source-name>   # vendor extended operator
+    //
+    // U8: a Unicode user-defined operator has no ABI-assigned two-letter
+    // <operator-name> code, so it uses the Itanium vendor-extended operator
+    // production, which exists for exactly this case. <digit> is the
+    // operator's arity *as declared* -- 1 for the prefix form, 2 for the infix
+    // form -- and for a member operator that count includes the implicit
+    // object parameter, so a member infix operator with a single declared
+    // parameter mangles with arity 2. (mangleUnqualifiedName computes it; see
+    // the CXXUserOperatorName/CXXOperatorName arm there.)
+    //
+    // SOURCE-NAME DERIVATION RULE. This is a de facto ABI decision for the
+    // prototype, so state it exactly:
+    //
+    //     <source-name> for U+XXXX  ==  "op_u" followed by the code point in
+    //     UPPERCASE hexadecimal, with no "U+" prefix, zero-padded to a
+    //     MINIMUM of four digits and widened as required above the BMP
+    //     (five digits from U+10000, six from U+100000).
+    //
+    // So U+229E gives op_u229E, U+2A0D gives op_u2A0D, U+0F3A -- were it ever
+    // admitted -- would give op_u0F3A, and U+1D6C1 gives op_u1D6C1. The
+    // padding-to-four rule is cosmetic (it makes BMP operators line up); the
+    // *injectivity* comes from hex being injective on the code point, since
+    // leading zeros are only ever added to reach four digits and every code
+    // point above 0xFFFF is already at least five. No two distinct operators
+    // can therefore derive the same source-name.
+    //
+    // The derivation is from the operator's Unicode SCALAR VALUE, never from
+    // its spelling: the glyph, a \u universal-character-name and a \N{...}
+    // name all denote one operator (U11) and must produce one symbol. That is
+    // free here because DeclarationName carries the code point and no
+    // spelling ever reaches the mangler.
+    //
+    // The derived identifier is then emitted as an ordinary <source-name>
+    // (decimal byte length, then the identifier), following the precedent set
+    // by literal-operator suffixes just above -- `li <source-name>`. Binary
+    // U+229E therefore mangles as v28op_u229E.
+    uint32_t CodePoint = Name.getCXXUserOperatorCodePoint();
+    assert(CodePoint && "user operator name with no code point");
+    // As for the arity-sensitive built-in operators below (OO_Plus etc.), an
+    // unknown arity is a bug in the caller rather than something to encode.
+    assert((Arity == 1 || Arity == 2) &&
+           "Invalid arity for a user-defined operator!");
+
+    std::string Hex = llvm::utohexstr(CodePoint, /*LowerCase=*/false);
+    SmallString<16> SourceName("op_u");
+    if (Hex.size() < 4)
+      SourceName.append(4 - Hex.size(), '0');
+    SourceName.append(Hex);
+
+    Out << 'v' << Arity << SourceName.size() << SourceName;
+    return;
+  }
   }
 }
 
