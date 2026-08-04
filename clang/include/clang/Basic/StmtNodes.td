@@ -131,6 +131,7 @@ def GNUNullExpr : StmtNode<Expr>;
 def CXXOperatorCallExpr : StmtNode<CallExpr>;
 def CXXMemberCallExpr : StmtNode<CallExpr>;
 def CXXRewrittenBinaryOperator : StmtNode<Expr>;
+def UserOperatorExpr : StmtNode<Expr>;
 def CXXNamedCastExpr : StmtNode<ExplicitCastExpr, 1>;
 def CXXStaticCastExpr : StmtNode<CXXNamedCastExpr>;
 def CXXDynamicCastExpr : StmtNode<CXXNamedCastExpr>;

@@ -1682,6 +1682,9 @@ enum StmtCode {
   /// A BacktickInfixExpr record.
   EXPR_BACKTICK_INFIX,
 
+  /// A UserOperatorExpr record.
+  EXPR_USER_OPERATOR,
+
   /// A ParenListExpr record.
   EXPR_PAREN_LIST,
 
