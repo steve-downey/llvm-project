@@ -26657,6 +26657,75 @@ TEST_F(FormatTest, BacktickOperatorFormatting) {
                "x = a `f` b;", Style);
 }
 
+TEST_F(FormatTest, UnicodeOperatorFormatting) {
+  // Infix use: spaces on both sides, whatever the input spacing was.
+  verifyFormat("int x = a ⊞ b;");
+  verifyFormat("int x = a ⊞ b;", "int x=a⊞b;");
+  verifyFormat("int x = a ⊞ b;", "int x = a   ⊞   b;");
+
+  // Chained (left-associative) and mixed with ordinary operators.
+  verifyFormat("int x = a ⊞ b ⊗ c;", "int x=a⊞b⊗c;");
+  verifyFormat("int x = a ⊞ b * c;", "int x=a⊞b*c;");
+  verifyFormat("int x = (a ⊞ b) ⊞ c;", "int x=(a⊞b)⊞c;");
+
+  // Prefix use: binds to its operand, no space between.
+  verifyFormat("int x = ⊖a;");
+  verifyFormat("int x = ⊖a;", "int x = ⊖ a;");
+  verifyFormat("int x = a ⊞ ⊖b;", "int x = a⊞⊖b;");
+  verifyFormat("int x = (⊖a) ⊞ b;", "int x=( ⊖ a )⊞b;");
+  // Position decides, so the built-in unary minus keeps working either side.
+  verifyFormat("int x = -a ⊞ -b;", "int x=-a⊞-b;");
+
+  // Declaration: `operator` and the glyph are never separated.
+  verifyFormat("int operator⊞(int, int);", "int operator ⊞ (int,int);");
+  verifyFormat("struct S {\n"
+               "  S operator⊞(S) const;\n"
+               "  S operator⊖() const;\n"
+               "};",
+               "struct S{S operator⊞(S)const;S operator⊖()const;};");
+  verifyFormat("template <class T> T operator⊗(T, T);");
+
+  // UCN spellings (U11) format identically -- same token kind, so the same
+  // rules apply; only the width differs.
+  verifyFormat("int x = a \\N{SQUARED PLUS} b;", "int x=a\\N{SQUARED PLUS}b;");
+  verifyFormat("int x = a \\u229E b;", "int x=a\\u229Eb;");
+  verifyFormat("int operator\\N{SQUARED PLUS}(int, int);",
+               "int operator \\N{SQUARED PLUS} (int,int);");
+
+  // Mixed with the backtick infix operator: the two compose.
+  verifyFormat("int x = a `f` b ⊞ c;", "int x=a`f`b⊞c;");
+  verifyFormat("int x = a ⊞ b `f` c;", "int x=a⊞b`f`c;");
+  verifyFormat("int x = `new` ⊞ b;", "int x=`new`⊞b;");
+  verifyFormat("int x = a `f` ⊖b;", "int x=a`f`⊖b;");
+
+  // Column width: these are 3-byte UTF-8 characters of display width 1, so
+  // the operator costs one column, not three.  "x = aaaa ⊞ bbbb;" is 16.
+  auto Style = getLLVMStyleWithColumns(16);
+  verifyFormat("x = aaaa ⊞ bbbb;", Style);
+  // One column narrower and it has to wrap -- which it does at the operator.
+  Style = getLLVMStyleWithColumns(15);
+  verifyFormat("x = aaaa ⊞\n"
+               "    bbbb;",
+               "x = aaaa ⊞ bbbb;", Style);
+
+  // A long chain wraps at the operators, and honours BreakBeforeBinaryOperators
+  // -- both of which fall out of TT_BinaryOperator.
+  verifyFormat("int x = aaaaaaaaaaaaaaaaaaaa ⊞ bbbbbbbbbbbbbbbbbbbb ⊞ "
+               "cccccccccccccccccccc ⊞\n"
+               "    dddddddddddddddddddd;");
+  Style = getLLVMStyle();
+  Style.BreakBeforeBinaryOperators = FormatStyle::BOS_All;
+  verifyFormat("int x = aaaaaaaaaaaaaaaaaaaa ⊞ bbbbbbbbbbbbbbbbbbbb ⊞ "
+               "cccccccccccccccccccc\n"
+               "    ⊞ dddddddddddddddddddd;",
+               Style);
+
+  // Excluded code points are not operators and formatting of source that
+  // contains one is unchanged (U§5: rejected, never aliased -- and never
+  // silently respaced into something that looks like an operator either).
+  verifyFormat("int x = a−b;", "int x = a−b;");
+}
+
 TEST_F(FormatTest, BacktickOperatorJSNonRegression) {
   // JS template strings must not be affected by C++ backtick formatting.
   // (JS is tested fully in FormatTestJS; this is a smoke test from FormatTest.)

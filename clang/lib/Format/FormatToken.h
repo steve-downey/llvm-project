@@ -872,8 +872,13 @@ public:
   prec::Level getPrecedence() const {
     if (ForcedPrecedence != prec::Unknown)
       return ForcedPrecedence;
+    // The formatter takes the permissive view of every lexing question, so
+    // tok::user_operator is an infix operator here whenever it exists at all
+    // (getFormattingLangOpts only lexes it for C++/Objective-C++).
     return getBinOpPrecedence(Tok.getKind(), /*GreaterThanIsOperator=*/true,
-                              /*CPlusPlus11=*/true);
+                              /*CPlusPlus11=*/true,
+                              /*BacktickIsOperator=*/true,
+                              /*UnicodeOperatorsEnabled=*/true);
   }
 
   template <typename T> [[nodiscard]] FormatToken *getPrevious(T A1) const {
