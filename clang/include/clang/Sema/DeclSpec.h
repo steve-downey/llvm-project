@@ -1070,6 +1070,9 @@ enum class UnqualifiedIdKind {
   IK_ConversionFunctionId,
   /// A user-defined literal name, e.g., operator "" _i.
   IK_LiteralOperatorId,
+  /// A Unicode user-defined operator name, e.g., operator⊞
+  /// (-funicode-operators).
+  IK_UserOperatorId,
   /// A constructor name.
   IK_ConstructorName,
   /// A constructor named via a template-id.
@@ -1118,6 +1121,12 @@ public:
     /// When Kind == IK_OperatorFunctionId, the overloaded operator
     /// that we parsed.
     struct OFI OperatorFunctionId;
+
+    /// When Kind == IK_UserOperatorId, the Unicode scalar value of the
+    /// user-operator token (-funicode-operators). The code point *is* the
+    /// identity of the name, so that two spellings of the same operator
+    /// (glyph or universal-character-name) name one entity.
+    uint32_t UserOperatorCodePoint;
 
     /// When Kind == IK_ConversionFunctionId, the type that the
     /// conversion function names.
@@ -1223,6 +1232,22 @@ public:
     Identifier = Id;
     StartLocation = OpLoc;
     EndLocation = IdLoc;
+  }
+
+  /// Specify that this unqualified-id was parsed as a Unicode
+  /// user-operator-id (-funicode-operators).
+  ///
+  /// \param CodePoint the Unicode scalar value of the operator token.
+  ///
+  /// \param OpLoc the location of the 'operator' keyword.
+  ///
+  /// \param OpTokLoc the location of the user-operator token.
+  void setUserOperatorId(uint32_t CodePoint, SourceLocation OpLoc,
+                         SourceLocation OpTokLoc) {
+    Kind = UnqualifiedIdKind::IK_UserOperatorId;
+    UserOperatorCodePoint = CodePoint;
+    StartLocation = OpLoc;
+    EndLocation = OpTokLoc;
   }
 
   /// Specify that this unqualified-id was parsed as a constructor name.

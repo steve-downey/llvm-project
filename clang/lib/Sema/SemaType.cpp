@@ -3188,6 +3188,7 @@ static QualType GetDeclSpecTypeForDeclarator(TypeProcessingState &state,
   case UnqualifiedIdKind::IK_OperatorFunctionId:
   case UnqualifiedIdKind::IK_Identifier:
   case UnqualifiedIdKind::IK_LiteralOperatorId:
+  case UnqualifiedIdKind::IK_UserOperatorId:
   case UnqualifiedIdKind::IK_TemplateId:
     T = ConvertDeclSpecToType(state);
 

@@ -200,6 +200,11 @@ Sema::isTemplateName(Scope *S, CXXScopeSpec &SS, bool hasTemplateKeyword,
     TName = Context.DeclarationNames.getCXXLiteralOperatorName(Name.Identifier);
     break;
 
+  case UnqualifiedIdKind::IK_UserOperatorId:
+    TName = Context.DeclarationNames.getCXXUserOperatorName(
+        Name.UserOperatorCodePoint);
+    break;
+
   default:
     return TNK_Non_template;
   }

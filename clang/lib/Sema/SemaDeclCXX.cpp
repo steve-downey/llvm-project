@@ -12757,6 +12757,7 @@ Decl *Sema::ActOnUsingDeclaration(Scope *S, AccessSpecifier AS,
   case UnqualifiedIdKind::IK_Identifier:
   case UnqualifiedIdKind::IK_OperatorFunctionId:
   case UnqualifiedIdKind::IK_LiteralOperatorId:
+  case UnqualifiedIdKind::IK_UserOperatorId:
   case UnqualifiedIdKind::IK_ConversionFunctionId:
     break;
 
@@ -18593,6 +18594,7 @@ NamedDecl *Sema::ActOnFriendFunctionDecl(Scope *S, Declarator &D,
     case UnqualifiedIdKind::IK_Identifier:
     case UnqualifiedIdKind::IK_ImplicitSelfParam:
     case UnqualifiedIdKind::IK_LiteralOperatorId:
+    case UnqualifiedIdKind::IK_UserOperatorId:
     case UnqualifiedIdKind::IK_OperatorFunctionId:
     case UnqualifiedIdKind::IK_TemplateId:
       break;

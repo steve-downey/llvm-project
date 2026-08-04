@@ -2641,6 +2641,7 @@ bool Sema::DiagnoseEmptyLookup(Scope *S, CXXScopeSpec &SS, LookupResult &R,
   unsigned diagnostic_suggest = diag::err_undeclared_var_use_suggest;
   if (Name.getNameKind() == DeclarationName::CXXOperatorName ||
       Name.getNameKind() == DeclarationName::CXXLiteralOperatorName ||
+      Name.getNameKind() == DeclarationName::CXXUserOperatorName ||
       Name.getNameKind() == DeclarationName::CXXConversionFunctionName) {
     diagnostic = diag::err_undeclared_use;
     diagnostic_suggest = diag::err_undeclared_use_suggest;

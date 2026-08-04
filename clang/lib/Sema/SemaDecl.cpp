@@ -6096,6 +6096,16 @@ Sema::GetNameFromUnqualifiedId(const UnqualifiedId &Name) {
     NameInfo.setCXXLiteralOperatorNameLoc(Name.EndLocation);
     return NameInfo;
 
+  case UnqualifiedIdKind::IK_UserOperatorId:
+    // The name is keyed on the Unicode scalar value, so the glyph and every
+    // universal-character-name spelling of it name one entity (U11).
+    NameInfo.setName(Context.DeclarationNames.getCXXUserOperatorName(
+        Name.UserOperatorCodePoint));
+    // NameInfo's own loc is the 'operator' keyword (set above); this is the
+    // operator token, and it is what getEndLoc()/getSourceRange() read.
+    NameInfo.setCXXUserOperatorNameLoc(Name.EndLocation);
+    return NameInfo;
+
   case UnqualifiedIdKind::IK_ConversionFunctionId: {
     TypeSourceInfo *TInfo;
     QualType Ty = GetTypeFromParser(Name.ConversionFunctionId, &TInfo);
@@ -15697,6 +15707,7 @@ void Sema::CheckFunctionOrTemplateParamDeclarator(Scope *S, Declarator &D) {
   case UnqualifiedIdKind::IK_OperatorFunctionId:
   case UnqualifiedIdKind::IK_ConversionFunctionId:
   case UnqualifiedIdKind::IK_LiteralOperatorId:
+  case UnqualifiedIdKind::IK_UserOperatorId:
   case UnqualifiedIdKind::IK_ConstructorName:
   case UnqualifiedIdKind::IK_DestructorName:
   case UnqualifiedIdKind::IK_ImplicitSelfParam:
