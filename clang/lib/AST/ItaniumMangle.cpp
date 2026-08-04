@@ -1444,6 +1444,7 @@ void CXXNameMangler::mangleUnresolvedName(
     // <base-unresolved-name> ::= on <operator-name>
     case DeclarationName::CXXConversionFunctionName:
     case DeclarationName::CXXLiteralOperatorName:
+    case DeclarationName::CXXUserOperatorName:
     case DeclarationName::CXXOperatorName:
       Out << "on";
       mangleOperatorName(name, knownArity);
@@ -1707,6 +1708,7 @@ void CXXNameMangler::mangleUnqualifiedName(
     [[fallthrough]];
   case DeclarationName::CXXConversionFunctionName:
   case DeclarationName::CXXLiteralOperatorName:
+  case DeclarationName::CXXUserOperatorName:
     mangleOperatorName(Name, Arity);
     writeAbiTags(ND, AdditionalAbiTags);
     break;
@@ -2656,6 +2658,13 @@ void CXXNameMangler::mangleOperatorName(DeclarationName Name, unsigned Arity) {
   case DeclarationName::CXXOperatorName:
     mangleOperatorName(Name.getCXXOverloadedOperator(), Arity);
     break;
+
+  case DeclarationName::CXXUserOperatorName:
+    // U09 fills this in: the Itanium vendor-extended operator production,
+    // <operator-name> ::= v <digit> <source-name>, with a code-point-derived
+    // source-name (U8 / U-design section 9). Not reachable before U07 makes
+    // such a name declarable.
+    llvm_unreachable("U09: Unicode user operator mangling not implemented");
   }
 }
 

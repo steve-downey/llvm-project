@@ -659,6 +659,14 @@ let Class = PropertyTypeCase<DeclarationName, "CXXLiteralOperatorName"> in {
     return ctx.DeclarationNames.getCXXLiteralOperatorName(identifier);
   }]>;
 }
+let Class = PropertyTypeCase<DeclarationName, "CXXUserOperatorName"> in {
+  def : Property<"codePoint", UInt32> {
+    let Read = [{ node.getCXXUserOperatorCodePoint() }];
+  }
+  def : Creator<[{
+    return ctx.DeclarationNames.getCXXUserOperatorName(codePoint);
+  }]>;
+}
 let Class = PropertyTypeCase<DeclarationName, "CXXUsingDirective"> in {
   def : Creator<[{
     return DeclarationName::getUsingDirectiveName();

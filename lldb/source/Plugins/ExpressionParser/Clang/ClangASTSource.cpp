@@ -122,6 +122,7 @@ bool ClangASTSource::FindExternalVisibleDeclsByName(
   // Operator names.
   case DeclarationName::CXXOperatorName:
   case DeclarationName::CXXLiteralOperatorName:
+  case DeclarationName::CXXUserOperatorName:
     break;
 
   // Using directives found in this context.

@@ -72,6 +72,7 @@ bool canHighlightName(DeclarationName Name) {
   case DeclarationName::CXXOperatorName:
   case DeclarationName::CXXDeductionGuideName:
   case DeclarationName::CXXLiteralOperatorName:
+  case DeclarationName::CXXUserOperatorName:
   case DeclarationName::CXXUsingDirective:
     return false;
   }

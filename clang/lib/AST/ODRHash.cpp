@@ -99,6 +99,9 @@ void ODRHash::AddDeclarationNameInfoImpl(DeclarationNameInfo NameInfo) {
   case DeclarationName::CXXLiteralOperatorName:
     AddIdentifierInfo(Name.getCXXLiteralIdentifier());
     break;
+  case DeclarationName::CXXUserOperatorName:
+    ID.AddInteger(Name.getCXXUserOperatorCodePoint());
+    break;
   case DeclarationName::CXXUsingDirective:
     break;
   case DeclarationName::CXXDeductionGuideName: {

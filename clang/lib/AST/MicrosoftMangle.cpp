@@ -1362,6 +1362,12 @@ void MicrosoftCXXNameMangler::mangleUnqualifiedName(GlobalDecl GD,
       break;
     }
 
+    case DeclarationName::CXXUserOperatorName:
+      // U09 decides this; U8 records MSVC mangling as unexamined. Not
+      // reachable before U07 makes such a name declarable.
+      llvm_unreachable("U09: Unicode user operator MSVC mangling not "
+                       "implemented");
+
     case DeclarationName::CXXDeductionGuideName:
       llvm_unreachable("Can't mangle a deduction guide name!");
 
