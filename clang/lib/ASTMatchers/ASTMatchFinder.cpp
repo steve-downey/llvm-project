@@ -269,6 +269,22 @@ public:
 
     return match(*Node->getLHS()) && match(*Node->getRHS());
   }
+  bool TraverseUserOperatorExpr(UserOperatorExpr *Node) {
+    if (!Finder->isTraversalIgnoringImplicitNodes())
+      return VisitorBase::TraverseUserOperatorExpr(Node);
+    if (!Node)
+      return true;
+    ScopedIncrement ScopedDepth(&CurrentDepth);
+
+    // As written, the children are the operands; the call the use desugars
+    // to, and the synthesized callee naming operator<glyph>, are not spelled
+    // in the source at all.
+    for (unsigned I = 0, N = Node->getNumOperands(); I != N; ++I)
+      if (Expr *Operand = Node->getOperand(I))
+        if (!match(*Operand))
+          return false;
+    return true;
+  }
   bool TraverseAttr(Attr *A) {
     if (A == nullptr ||
         (A->isImplicit() &&
@@ -536,6 +552,20 @@ public:
       {
         ASTNodeNotSpelledInSourceScope RAII(this, true);
         for (auto *SubStmt : RBO->children()) {
+          TraverseStmt(SubStmt);
+        }
+      }
+      return true;
+    } else if (auto *UOE = dyn_cast<UserOperatorExpr>(S)) {
+      {
+        ASTNodeNotAsIsSourceScope RAII(this, true);
+        for (unsigned I = 0, N = UOE->getNumOperands(); I != N; ++I)
+          if (Expr *Operand = UOE->getOperand(I))
+            TraverseStmt(Operand);
+      }
+      {
+        ASTNodeNotSpelledInSourceScope RAII(this, true);
+        for (auto *SubStmt : UOE->children()) {
           TraverseStmt(SubStmt);
         }
       }

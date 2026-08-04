@@ -2171,6 +2171,19 @@ extern const internal::VariadicDynCastAllOfMatcher<Stmt,
                                                    CXXRewrittenBinaryOperator>
     cxxRewrittenBinaryOperator;
 
+/// Matches uses of a Unicode user-defined operator, under
+/// -funicode-operators. The operator's identity is its code point, available
+/// as UserOperatorExpr::getCodePoint(); there is no fixed spelling table, so
+/// hasAnyOperatorName() does not apply to this node.
+///
+/// Example matches the infix use of U+229E SQUARED PLUS
+/// \code
+///   int operator⊞(int, int);
+///   int f(int a, int b) { return a ⊞ b; }
+/// \endcode
+extern const internal::VariadicDynCastAllOfMatcher<Stmt, UserOperatorExpr>
+    userOperatorExpr;
+
 /// Matches expressions.
 ///
 /// Example matches x()
