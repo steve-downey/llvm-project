@@ -503,6 +503,61 @@ unsigned Lexer::getSpelling(const Token &Tok, const char *&Buffer,
   return getSpellingSlow(Tok, TokStart, LangOpts, const_cast<char*>(Buffer));
 }
 
+/// Decode a spelling that is exactly one universal-character-name to the code
+/// point it designates.  Returns 0 for anything else, so the caller may pass an
+/// unvalidated spelling: unlike clang::expandUCNs, which asserts because the
+/// lexer has already checked its input, this is total.
+///
+/// Covers every UCN form the lexer can produce outside a literal: the two
+/// fixed-width numeric forms (4 and 8 hex digits), the C++23 delimited numeric
+/// form, and the C++23 named form.
+static uint32_t decodeUCNSpelling(StringRef Spelling) {
+  if (Spelling.size() < 3 || Spelling[0] != '\\')
+    return 0;
+
+  char Kind = Spelling[1];
+  StringRef Rest = Spelling.drop_front(2);
+  uint32_t CodePoint = 0;
+
+  if (Kind == 'N') {
+    // \N{NAME} -- the C++23 named universal-character-name.  Strict matching
+    // first and then loose, which is exactly what tryReadNamedUCN accepts (it
+    // diagnoses a loose match and then recovers to it), so the lexer and this
+    // decode never disagree about which code point a name designates.
+    if (!Rest.starts_with("{") || !Rest.ends_with("}"))
+      return 0;
+    StringRef Name = Rest.drop_front().drop_back();
+    if (std::optional<char32_t> Strict =
+            llvm::sys::unicode::nameToCodepointStrict(Name))
+      CodePoint = *Strict;
+    else if (std::optional<llvm::sys::unicode::LooseMatchingResult> Loose =
+                 llvm::sys::unicode::nameToCodepointLooseMatching(Name))
+      CodePoint = Loose->CodePoint;
+    else
+      return 0;
+  } else if (Kind == 'u' && Rest.starts_with("{")) {
+    // \u{HEX...} -- the C++23 delimited escape sequence.
+    if (!Rest.ends_with("}"))
+      return 0;
+    StringRef Hex = Rest.drop_front().drop_back();
+    if (Hex.empty() || Hex.getAsInteger(16, CodePoint))
+      return 0;
+  } else if (Kind == 'u' || Kind == 'U') {
+    StringRef Hex = Rest;
+    if (Hex.size() != (Kind == 'u' ? 4u : 8u) || Hex.getAsInteger(16, CodePoint))
+      return 0;
+  } else {
+    return 0;
+  }
+
+  // A UCN may not designate a surrogate or a value outside the code space.
+  // The lexer rejects those before a token is formed; reject them here too so
+  // that a spelling this function accepts is always a real scalar value.
+  if (CodePoint > 0x10FFFF || (CodePoint >= 0xD800 && CodePoint <= 0xDFFF))
+    return 0;
+  return CodePoint;
+}
+
 uint32_t Lexer::getUserOperatorCodePoint(StringRef Spelling) {
   // A user-operator token is exactly one code point (U1): no combining marks,
   // no multi-character operators, no operator a prefix of another.  So the
@@ -510,6 +565,16 @@ uint32_t Lexer::getUserOperatorCodePoint(StringRef Spelling) {
   // is not a user-operator spelling at all.
   if (Spelling.empty())
     return 0;
+
+  // U11: a universal-character-name designating a U1 code point *is* that
+  // operator token, so the two spellings must collapse to one identity here
+  // and not merely lex alike.  This function is the identity function for the
+  // whole feature -- DeclarationName, mangling, printing and serialization all
+  // key on its result -- so canonicalizing at this single point is what makes
+  // `operator\N{SQUARED PLUS}` and `operator⊞` the same entity, rather than two
+  // entities that happen to print the same.
+  if (Spelling.front() == '\\')
+    return decodeUCNSpelling(Spelling);
 
   const auto *Begin = reinterpret_cast<const llvm::UTF8 *>(Spelling.begin());
   const auto *End = reinterpret_cast<const llvm::UTF8 *>(Spelling.end());
@@ -1882,6 +1947,18 @@ bool Lexer::tryConsumeIdentifierUCN(const char *&CurPtr, unsigned Size,
     if (isASCII(CodePoint) || isUnicodeWhitespace(CodePoint))
       return false;
 
+    // The exact mirror of the check in tryConsumeIdentifierUTF8Char: a U1 code
+    // point *ends* the identifier rather than being absorbed into it "for
+    // recovery purposes" below, so `a\u229Eb` is the same three tokens as
+    // `a⊞b`.  Without this the recovery path would swallow the UCN and the
+    // whole identifier would be one token -- and it would do so only in an
+    // ordinary compile, since -dump-tokens and -E set isPreprocessedOutput()
+    // and disable the recovery, which is why the assertion for this lives in
+    // LexerTest and not in a lit test.  (Off the flag, control falls through
+    // to the unchanged recovery path.)
+    if (isUserOperatorCodePoint(CodePoint))
+      return false;
+
     bool DiagnoseAndContinue = !isLexingRawMode() &&
                                !ParsingPreprocessorDirective &&
                                !PP->isPreprocessedOutput();
@@ -1942,7 +2019,7 @@ bool Lexer::tryConsumeIdentifierUTF8Char(const char *&CurPtr, Token &Result) {
     // purposes" below.  Ending the identifier here is what makes `a⊞b` three
     // tokens without any whitespace rule.  (Off the flag, control falls
     // through to the unchanged recovery path.)
-    if (LangOpts.UnicodeOperators && isUserOperatorChar(CodePoint))
+    if (isUserOperatorCodePoint(CodePoint))
       return false;
 
     bool DiagnoseAndContinue = !isLexingRawMode() &&
@@ -1975,6 +2052,16 @@ bool Lexer::tryConsumeIdentifierUTF8Char(const char *&CurPtr, Token &Result) {
   // being lexed, and that warnings about trailing spaces are emitted.
   ConsumeChar(CurPtr, FirstCodeUnitSize, Result);
   CurPtr = UnicodePtr;
+  return true;
+}
+
+bool Lexer::isUserOperatorCodePoint(uint32_t CodePoint) const {
+  return LangOpts.UnicodeOperators && isUserOperatorChar(CodePoint);
+}
+
+bool Lexer::LexUserOperator(Token &Result, const char *CurPtr) {
+  MIOpt.ReadToken();
+  FormTokenWithChars(Result, CurPtr, tok::user_operator);
   return true;
 }
 
@@ -4618,6 +4705,18 @@ LexStart:
           goto LexNextToken;
         }
 
+        // U11: a universal-character-name -- \uXXXX, \UXXXXXXXX, the C++23
+        // delimited \u{...} and the C++23 named \N{...} -- designating a U1
+        // code point forms that operator token, exactly as a UCN designating an
+        // XID character participates in an identifier.  The classification is
+        // the *same* one the literal-glyph path below performs: by this point
+        // the UCN has already been decoded to a scalar value, so there is
+        // nothing spelling-specific left to decide and no second table search
+        // (U§8: "that code point takes the same three-way classification as a
+        // literal one").  No normalization runs here or there.
+        if (isUserOperatorCodePoint(CodePoint))
+          return LexUserOperator(Result, CurPtr);
+
         return LexUnicodeIdentifierStart(Result, CodePoint, CurPtr);
       }
     }
@@ -4659,11 +4758,8 @@ LexStart:
       // -funicode-operators test as the only thing between a code point and
       // the upstream path, which is what makes "flag off == upstream" hold by
       // inspection.
-      if (LangOpts.UnicodeOperators && isUserOperatorChar(CodePoint)) {
-        MIOpt.ReadToken();
-        FormTokenWithChars(Result, CurPtr, tok::user_operator);
-        return true;
-      }
+      if (isUserOperatorCodePoint(CodePoint))
+        return LexUserOperator(Result, CurPtr);
       return LexUnicodeIdentifierStart(Result, CodePoint, CurPtr);
     }
 

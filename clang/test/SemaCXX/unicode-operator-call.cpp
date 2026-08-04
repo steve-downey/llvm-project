@@ -27,10 +27,10 @@
 // not duplicate; the *call*-side symbol evidence lives in
 // CodeGenCXX/unicode-operator-call.cpp.
 //
-// NOT this file, because it cannot be: UCN and \N{...} spellings of the
-// operator (step file item 8). U04 is unchecked, so `operator⊞` still
-// lexes as an identifier and errors. See the U10 handoff for the exact two
-// cases to add here once U04 lands.
+// Item 8 of the step file -- UCN and \N{...} spellings of the operator, mixed
+// between declaration and call -- was unwritable when this file was authored
+// (U04 was unchecked, so `operator⊞` lexed as an identifier and errored).
+// U04 landed and it is now section 9 below.
 
 //===--------------------------------------------------------------------===//
 // 1. The fundamental-only call, end to end
@@ -371,3 +371,43 @@ template <class T> int literal_operator_control(T t) {
 // Both RUN lines above compile this whole file; the second adds -fbacktick.
 // Every assertion here must hold identically under either, which is the U7
 // ground rule that the two flags are independent.
+
+//===--------------------------------------------------------------------===//
+// 9. UCN spellings, and mixing them between declaration and call (U04/U11)
+//===--------------------------------------------------------------------===//
+
+// The step file's item 8, unwritable until U04 landed. The claim is not that a
+// UCN lexes -- it is that a UCN and a glyph name *one entity*, so a call
+// spelled one way resolves to a function declared the other way. Each case is
+// a constant evaluation rather than a bare acceptance, so a wrong answer is a
+// wrong number and not merely a missing diagnostic.
+
+// (a) Declared with the glyph, called with each UCN form.
+constexpr int operator⊦(int a, int b) { return 10 * a + b; }
+static_assert(operator⊦(1, 2) == 12);
+static_assert(operator\U000022A6(1, 2) == 12);
+static_assert(operator\u{22A6}(1, 2) == 12);
+static_assert(operator\N{ASSERTION}(1, 2) == 12);
+
+// (b) Declared with a named UCN, called with the glyph. The declaration and
+// the definition are also spelled differently from each other, so this is
+// simultaneously a redeclaration-merge assertion.
+constexpr int operator\N{MODELS}(int a, int b);
+constexpr int operator⊧(int a, int b) { return 100 * a + b; }
+static_assert(operator⊧(1, 2) == 102);
+
+// (c) The overload set is one set however its members are spelled: a UCN
+// declaration and a glyph declaration of the same operator with different
+// parameter types overload each other rather than shadowing.
+constexpr int operator\N{ASSERTION}(double, double) { return 7; }
+static_assert(operator⊦(1.0, 2.0) == 7);
+static_assert(operator⊦(1, 2) == 12);
+
+// (d) A UCN-spelled operator-function-id names the overload set in every
+// position an unqualified-id does, exactly as the glyph does (section 7.1).
+// (Both initializers are target-typed, because section (c) put two overloads
+// in the set -- which is itself the point: the UCN names the same *set*.)
+constexpr int (*pfn_ucn)(int, int) = &operator\N{ASSERTION};
+constexpr int (*pfn_glyph)(int, int) = &operator⊦;
+static_assert(pfn_ucn == pfn_glyph);
+static_assert(pfn_ucn(3, 4) == 34);
