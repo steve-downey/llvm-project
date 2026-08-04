@@ -44,6 +44,24 @@ static bool startsWithInitStatement(const AnnotatedLine &Line) {
          Line.startsWith(tok::kw_switch);
 }
 
+/// Returns \c true if \p Prev (which may be null) ends an operand, i.e. if a
+/// user-introduced infix operator appearing right after it would be infix
+/// rather than prefix.
+///
+/// This is the formatter's copy of the rule the parser uses: fixity is decided
+/// by position alone, with no lookahead and no declaration lookup.  It is
+/// shared by the backtick infix operator and by Unicode user-defined
+/// operators, which sit at the same precedence level and must agree about
+/// where an operand ends -- a keyword-escape closes an identifier, so a
+/// Unicode operator right after it is infix.
+static bool endsOperand(const FormatToken *Prev) {
+  return Prev &&
+         (Prev->Tok.isLiteral() ||
+          Prev->isOneOf(tok::identifier, tok::r_paren, tok::r_square,
+                        tok::r_brace, tok::kw_true, tok::kw_false,
+                        tok::kw_nullptr, tok::kw_this, TT_BacktickEscapeClose));
+}
+
 /// Returns \c true if the token can be used as an identifier in
 /// an Objective-C \c \@selector, \c false otherwise.
 ///
@@ -2416,16 +2434,12 @@ private:
 
     if (IsCpp && Current.is(tok::backtick)) {
       if (PendingBacktickKind == TT_Unknown) {
-        // Open backtick: infix if post-operand, escape otherwise.
+        // Open backtick: infix if post-operand, escape otherwise.  An infix
+        // close does not end an operand -- the right operand still follows it
+        // -- but S10 accepted one here, and it only reaches this point on
+        // input that has no valid parse anyway, so keep the behaviour.
         const FormatToken *Prev = Current.getPreviousNonComment();
-        bool PostOperand =
-            Prev &&
-            (Prev->Tok.isLiteral() ||
-             Prev->isOneOf(tok::identifier, tok::r_paren, tok::r_square,
-                           tok::r_brace, tok::kw_true, tok::kw_false,
-                           tok::kw_nullptr, tok::kw_this,
-                           TT_BacktickEscapeClose, TT_BacktickInfixClose));
-        if (PostOperand) {
+        if (endsOperand(Prev) || (Prev && Prev->is(TT_BacktickInfixClose))) {
           Current.setType(TT_BacktickInfixOpen);
           PendingBacktickKind = TT_BacktickInfixOpen;
         } else {
@@ -2439,6 +2453,19 @@ private:
                             : TT_BacktickEscapeClose);
         PendingBacktickKind = TT_Unknown;
       }
+      return;
+    }
+
+    // A Unicode user-defined operator is infix after an operand and prefix
+    // otherwise -- position decides, exactly as in the parser.  Everything
+    // else (spacing, breaking, penalties) then falls out of the existing
+    // TT_BinaryOperator / TT_UnaryOperator handling; in an operator-function-id
+    // the kw_operator handler below rewrites TT_UnaryOperator to
+    // TT_OverloadedOperator, just as it does for `operator+`.
+    if (IsCpp && Current.is(tok::user_operator)) {
+      Current.setType(endsOperand(Current.getPreviousNonComment())
+                          ? TT_BinaryOperator
+                          : TT_UnaryOperator);
       return;
     }
 

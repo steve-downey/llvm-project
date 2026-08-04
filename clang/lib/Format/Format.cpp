@@ -4503,6 +4503,11 @@ LangOptions getFormattingLangOpts(const FormatStyle &Style) {
   if (Style.Language == FormatStyle::LK_Cpp ||
       Style.Language == FormatStyle::LK_ObjC) {
     LangOpts.Backtick = 1;
+    // Lex Unicode user-defined operator code points as tok::user_operator so
+    // the annotator can classify them.  Like Backtick above this is keyed on
+    // the language rather than on LangOpts.CPlusPlus, because JS/Java/C# fall
+    // through to the same `default:` arm and also set CPlusPlus = 1.
+    LangOpts.UnicodeOperators = 1;
   }
 
   return LangOpts;
