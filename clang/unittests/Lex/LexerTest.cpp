@@ -1080,4 +1080,35 @@ TEST_F(LexerTest, UnicodeOperatorUCNOfExcludedCodePointIsNotAToken) {
   }
 }
 
+// U05: a named exclusion neither forms an operator token nor is absorbed into
+// an adjacent identifier.  The second half is the one a lit test cannot make:
+// -dump-tokens and -E run with Preprocessor::isPreprocessedOutput() set, which
+// already suppresses the "carry on as if the codepoint was valid for recovery
+// purposes" path, so only an ordinary Preprocessor shows the difference.  Same
+// shape as UnicodeOperatorAdjacency (U03) and UnicodeOperatorUCNAdjacency
+// (U04), and deliberately so: an excluded code point tokenizes exactly like an
+// included one, it just has no meaning.
+TEST_F(LexerTest, UnicodeOperatorExcludedCodePointEndsAnIdentifier) {
+  LangOpts.CPlusPlus = true;
+  LangOpts.CPlusPlus23 = true;
+  LangOpts.UnicodeOperators = true;
+
+  // Spaced, unspaced, and spelled as a universal-character-name: one shape.
+  // The assertion is the *length* of the leading identifier -- one byte, "a".
+  // Absorbing the excluded code point would give a single identifier spelled
+  // "a−b" (or "a−b"), which is what happened before U05 and what
+  // -dump-tokens cannot show.  LexTokensUntilEOF stops at the tok::unknown, so
+  // one token back is exactly the outcome being asserted.
+  for (StringRef Source :
+       {"a \xE2\x88\x92 b", "a\xE2\x88\x92 b", "a \xE2\x88\x92\x62",
+        "a\xE2\x88\x92\x62", "a \\u2212 b", "a\\u2212b",
+        "a\\N{MINUS SIGN}b"}) {
+    std::vector<Token> Toks = Lex(Source);
+    ASSERT_EQ(1u, Toks.size()) << Source;
+    EXPECT_TRUE(Toks[0].is(tok::identifier)) << Source;
+    EXPECT_EQ(1u, Toks[0].getLength()) << Source;
+    SourceMgr.clearIDTables();
+  }
+}
+
 } // anonymous namespace
