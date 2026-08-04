@@ -137,19 +137,21 @@ int excl_named = a \N{MINUS SIGN} b;
 //
 // The security property (U§10): U+2212 must never *alias* '-'. If either
 // spelling had produced an operator token the parser would name it, so the
-// absence of `operator−` anywhere in the diagnostics is the assertion, and
-// the two errors are the ones an unlexable token gets.
+// absence of `operator−` anywhere in the diagnostics is the assertion.
 // EXCL-NOT: 'operator−'
+// EXCL: error: '−' U+2212 is not a user-defined operator: it is confusable with '-'
 // EXCL: error: expected ';' after top level declarator
+// EXCL: error: '−' U+2212 is not a user-defined operator: it is confusable with '-'
 // EXCL: error: expected ';' after top level declarator
 // EXCL-NOT: 'operator−'
 //
-// Note the asymmetry, which is upstream's and not this feature's, and which
-// U05 has to decide about: a *glyph* that is neither an operator nor an
-// identifier character is diagnosed by the lexer (`unexpected character
-// '−' U+2212`) and dropped, while the same code point spelled as a UCN
-// becomes tok::unknown with no lexer diagnostic at all -- because
-// LexUnicodeIdentifierStart may only "drop the character" when it was spelled
-// as a literal character, the standard requiring that an explicit UCN not be
-// thrown away.  So an excluded code point is never silently *accepted* in
-// either spelling, but only one spelling gets a message about the code point.
+// U05 decided the asymmetry U04 measured here, and decided it the way U11
+// argues: an excluded code point now gets the *same* message in every
+// spelling, because the message is emitted from the classification point --
+// before LexUnicodeIdentifierStart, which is where the asymmetry lived (it may
+// only "drop the character" when it was spelled as a literal character, the
+// standard requiring that an explicit UCN not be thrown away).  Diagnosing
+// first and then forming tok::unknown is the action that is legal for both
+// spellings.  The wording itself is pinned in
+// clang/test/Lexer/unicode-operators-excluded.cpp; the point here is that the
+// UCN spelling gets it at all.
