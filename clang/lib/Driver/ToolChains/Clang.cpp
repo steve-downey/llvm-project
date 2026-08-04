@@ -7915,6 +7915,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   Args.addLastArg(CmdArgs, options::OPT_fsized_deallocation,
                   options::OPT_fno_sized_deallocation);
 
+  // -funicode-operators enables Unicode user-defined operators.
+  Args.addLastArg(CmdArgs, options::OPT_funicode_operators,
+                  options::OPT_fno_unicode_operators);
+
   // -faligned-allocation is on by default in C++17 onwards and otherwise off
   // by default.
   if (Arg *A = Args.getLastArg(options::OPT_faligned_allocation,

@@ -4063,6 +4063,10 @@ defm reflection : BoolFOption<"reflection",
   PosFlag<SetTrue, [], [CC1Option],
           "Enable C++26 reflection">,
   NegFlag<SetFalse>>, ShouldParseIf<cplusplus.KeyPath>;
+defm unicode_operators : BoolFOption<"unicode-operators",
+  LangOpts<"UnicodeOperators">, DefaultFalse,
+  PosFlag<SetTrue, [], [], "Enable Unicode user-defined operators">,
+  NegFlag<SetFalse>, BothFlags<[], [ClangOption, CC1Option]>>;
 defm sized_deallocation : BoolFOption<"sized-deallocation",
   LangOpts<"SizedDeallocation">, Default<cpp14.KeyPath>,
   PosFlag<SetTrue, [], [], "Enable C++14 sized global deallocation functions">,
