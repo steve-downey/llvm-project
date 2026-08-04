@@ -4188,10 +4188,11 @@ public:
     case DeclarationName::CXXUsingDirective:
       break;
     case DeclarationName::CXXUserOperatorName:
-      // U17 chooses the on-disk key encoding (a uint32 code point) and the
-      // matching DeclarationNameKey hash. Not reachable before U07.
-      llvm_unreachable("U17: Unicode user operator name serialization not "
-                       "implemented");
+      // The Unicode scalar value, written as a fixed-width uint32. There are
+      // 1,381 admissible code points spread over the BMP and beyond, so a
+      // byte (as CXXOperatorName uses) will not do.
+      KeyLen += 4;
+      break;
     }
 
     // length of DeclIDs.
@@ -4227,9 +4228,8 @@ public:
     case DeclarationName::CXXUsingDirective:
       return;
     case DeclarationName::CXXUserOperatorName:
-      // See EmitKeyDataLengthBase; U17.
-      llvm_unreachable("U17: Unicode user operator name serialization not "
-                       "implemented");
+      LE.write<uint32_t>(Name.getUserOperatorCodePoint());
+      return;
     }
 
     llvm_unreachable("Invalid name kind?");

@@ -2205,6 +2205,15 @@ public:
     return (OverloadedOperatorKind)Data;
   }
 
+  /// The Unicode scalar value identifying a user-defined operator name.
+  /// Unlike the identifier- and selector-keyed kinds, whose Data is a pointer
+  /// into the reading context, this is the name's whole identity and is
+  /// context-independent, so it needs no remapping across modules.
+  uint32_t getUserOperatorCodePoint() const {
+    assert(Kind == DeclarationName::CXXUserOperatorName);
+    return (uint32_t)Data;
+  }
+
   /// Compute a fingerprint of this key for use in on-disk hash table.
   unsigned getHash() const;
 

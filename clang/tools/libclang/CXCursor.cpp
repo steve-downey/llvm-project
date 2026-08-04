@@ -314,6 +314,7 @@ CXCursor cxcursor::MakeCXCursor(const Stmt *S, const Decl *Parent,
   case Stmt::CXXFoldExprClass:
   case Stmt::CXXReflectExprClass:
   case Stmt::CXXRewrittenBinaryOperatorClass:
+  case Stmt::UserOperatorExprClass:
   case Stmt::CXXStdInitializerListExprClass:
   case Stmt::CXXScalarValueInitExprClass:
   case Stmt::CXXUuidofExprClass:

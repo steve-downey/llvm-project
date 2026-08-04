@@ -10790,6 +10790,84 @@ TEST_P(ImportAndMergeAnonymousNamespace, NamespaceInNamespace) {
   test(ToCode, FromCode);
 }
 
+// U17: importing a Unicode user-defined operator, both halves -- the
+// DeclarationName (CXXUserOperatorName) and the expression node
+// (UserOperatorExpr). Neither is forced by the toolchain: ASTNodeImporter's
+// fallback returns an error for an unhandled node rather than failing to
+// link, so nothing but a test detects an omission here.
+struct ImportUnicodeOperators : ASTImporterOptionSpecificTestBase {};
+
+TEST_P(ImportUnicodeOperators, ImportUserOperatorName) {
+  Decl *FromTU = getTuDecl("int operator⊞(int, int);", Lang_CXX20, "input.cc");
+  auto *From = FirstDeclMatcher<FunctionDecl>().match(FromTU, functionDecl());
+
+  auto *To = Import(From, Lang_CXX20);
+  ASSERT_TRUE(To);
+  EXPECT_EQ(To->getDeclName().getNameKind(),
+            DeclarationName::CXXUserOperatorName);
+  EXPECT_EQ(To->getDeclName().getCXXUserOperatorCodePoint(), 0x229Eu);
+
+  // The code point is the whole identity and is context-independent, so the
+  // imported name must be the very name object the target context would have
+  // built for itself -- not a copy of it.
+  EXPECT_EQ(To->getDeclName(),
+            To->getASTContext().DeclarationNames.getCXXUserOperatorName(
+                0x229E));
+}
+
+TEST_P(ImportUnicodeOperators, ImportUserOperatorExpr) {
+  Decl *FromTU = getTuDecl(
+      R"(
+      struct S { int v; };
+      int operator⊞(S, S);
+      int foo(S a, S b) { return a ⊞ b; }
+      )",
+      Lang_CXX20, "input.cc");
+  auto *From =
+      FirstDeclMatcher<FunctionDecl>().match(FromTU, functionDecl(hasName("foo")));
+
+  auto *To = Import(From, Lang_CXX20);
+  ASSERT_TRUE(To);
+  ASSERT_TRUE(To->getBody());
+  const auto *Ret = cast<ReturnStmt>(*To->getBody()->child_begin());
+  const auto *UO =
+      dyn_cast<UserOperatorExpr>(Ret->getRetValue()->IgnoreImplicit());
+  ASSERT_TRUE(UO);
+  EXPECT_EQ(UO->getCodePoint(), 0x229Eu);
+  EXPECT_EQ(UO->getNumOperands(), 2u);
+  EXPECT_TRUE(UO->getOperatorLoc().isValid());
+  // The wrapper is transparent to evaluation: its one child is the call the
+  // use desugars to, and that call must have been imported too.
+  EXPECT_TRUE(isa<CallExpr>(UO->getSemanticForm()));
+  EXPECT_EQ(UO->getSemanticForm()->getType(), To->getReturnType());
+}
+
+TEST_P(ImportUnicodeOperators, ImportDistinctOperatorsStayDistinct) {
+  Decl *FromTU = getTuDecl(
+      R"(
+      int operator⊞(int, int);
+      int operator⊗(int, int);
+      )",
+      Lang_CXX20, "input.cc");
+  auto *FromAdd = FirstDeclMatcher<FunctionDecl>().match(FromTU, functionDecl());
+  auto *FromMul = LastDeclMatcher<FunctionDecl>().match(FromTU, functionDecl());
+  ASSERT_NE(FromAdd, FromMul);
+
+  auto *ToAdd = Import(FromAdd, Lang_CXX20);
+  auto *ToMul = Import(FromMul, Lang_CXX20);
+  ASSERT_TRUE(ToAdd);
+  ASSERT_TRUE(ToMul);
+  EXPECT_NE(ToAdd, ToMul);
+  EXPECT_NE(ToAdd->getDeclName(), ToMul->getDeclName());
+  EXPECT_EQ(ToAdd->getDeclName().getCXXUserOperatorCodePoint(), 0x229Eu);
+  EXPECT_EQ(ToMul->getDeclName().getCXXUserOperatorCodePoint(), 0x2297u);
+}
+
+INSTANTIATE_TEST_SUITE_P(ParameterizedTests, ImportUnicodeOperators,
+                         ExtendWithOptions(DefaultTestArrayForRunOptions,
+                                           std::vector<std::string>{
+                                               "-funicode-operators"}));
+
 INSTANTIATE_TEST_SUITE_P(ParameterizedTests, ASTImporterLookupTableTest,
                          DefaultTestValuesForRunOptions);
 
