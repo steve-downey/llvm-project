@@ -10,6 +10,7 @@ add_distinct_clang_unittest(SemaTests
   SemaLookupTest.cpp
   SemaModuleTest.cpp
   SemaNoloadLookupTest.cpp
+  UserOperatorDeclTest.cpp
   CLANG_LIBS
   clangAST
   clangASTMatchers
