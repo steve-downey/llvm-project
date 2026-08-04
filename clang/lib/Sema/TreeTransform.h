@@ -3074,6 +3074,18 @@ public:
                                            RHS, /*RequiresADL*/false);
   }
 
+  /// Build a new use of a Unicode user-defined operator.
+  ///
+  /// By default, performs semantic analysis to build the new expression.
+  /// Subclasses may override this routine to provide different behavior.
+  ExprResult RebuildUserOperatorExpr(SourceLocation OpLoc, uint32_t CodePoint,
+                                     const UnresolvedSetImpl &UnqualLookups,
+                                     MultiExprArg Operands, bool PerformADL) {
+    return getSema().CreateOverloadedUserOp(/*S=*/nullptr, OpLoc, CodePoint,
+                                            UnqualLookups, Operands,
+                                            PerformADL);
+  }
+
   /// Build a new conditional operator expression.
   ///
   /// By default, performs semantic analysis to build the new expression.
@@ -14215,6 +14227,65 @@ ExprResult TreeTransform<Derived>::TransformCXXRewrittenBinaryOperator(
 
   return getDerived().RebuildCXXRewrittenBinaryOperator(
       E->getOperatorLoc(), Decomp.Opcode, UnqualLookups, LHS.get(), RHS.get());
+}
+
+template <typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformUserOperatorExpr(UserOperatorExpr *E) {
+  // Transform the operands *as written* and re-run operator candidate
+  // assembly on them. Transforming the semantic form instead -- which is what
+  // a merely transparent wrapper would do -- rebuilds an ordinary call at
+  // instantiation, and an ordinary call assembles [over.match.call]
+  // candidates: ADL survives, because ADL is a property of the call, but
+  // member candidates do not, because they are a property of the operator
+  // syntax. Carrying the syntax across instantiation is why this node exists.
+  SmallVector<Expr *, 2> Operands;
+  for (unsigned I = 0, N = E->getNumOperands(); I != N; ++I) {
+    Expr *Operand = E->getOperand(I);
+    if (!Operand)
+      return ExprError();
+    ExprResult Result = getDerived().TransformExpr(Operand);
+    if (Result.isInvalid())
+      return ExprError();
+    Operands.push_back(Result.get());
+  }
+
+  // The non-member candidates of the rebuilt expression are the *phase-1*
+  // unqualified lookup set plus ADL from the instantiation context -- never a
+  // fresh lookup, which there is no scope to perform. Recover that set from
+  // the semantic form's callee, exactly as TransformCXXOperatorCallExpr does
+  // for the built-in operators.
+  Expr *Callee = nullptr;
+  if (auto *CE = dyn_cast<CallExpr>(E->getSemanticForm()->IgnoreImplicit()))
+    Callee = CE->getCallee()->IgnoreParenImpCasts();
+
+  if (auto *ULE = dyn_cast_or_null<UnresolvedLookupExpr>(Callee)) {
+    LookupResult R(SemaRef, ULE->getName(), ULE->getNameLoc(),
+                   Sema::LookupOrdinaryName);
+    if (getDerived().TransformOverloadExprDecls(ULE, ULE->requiresADL(), R))
+      return ExprError();
+    return getDerived().RebuildUserOperatorExpr(
+        E->getOperatorLoc(), E->getCodePoint(), R.asUnresolvedSet(), Operands,
+        ULE->requiresADL());
+  }
+
+  // Otherwise the use was already resolved. A non-member winner left a
+  // DeclRefExpr callee: carry it forward as the whole unqualified set with
+  // ADL off, since it already won against everything ADL could contribute. A
+  // member winner left a MemberExpr callee and needs no set at all -- the
+  // qualified lookup on the left operand's type finds it again.
+  UnresolvedSet<1> UnqualLookups;
+  if (auto *DRE = dyn_cast_or_null<DeclRefExpr>(Callee)) {
+    NamedDecl *Found = cast_or_null<NamedDecl>(
+        getDerived().TransformDecl(E->getOperatorLoc(), DRE->getFoundDecl()));
+    if (!Found)
+      return ExprError();
+    UnqualLookups.addDecl(Found);
+  }
+
+  return getDerived().RebuildUserOperatorExpr(
+      E->getOperatorLoc(), E->getCodePoint(), UnqualLookups, Operands,
+      /*PerformADL=*/false);
 }
 
 template<typename Derived>

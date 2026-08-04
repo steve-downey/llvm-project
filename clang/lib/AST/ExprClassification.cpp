@@ -339,6 +339,9 @@ static Cl::Kinds ClassifyInternal(ASTContext &Ctx, const Expr *E) {
   case Expr::BacktickInfixExprClass:
     return ClassifyInternal(Ctx, cast<BacktickInfixExpr>(E)->getSubExpr());
 
+  case Expr::UserOperatorExprClass:
+    return ClassifyInternal(Ctx, cast<UserOperatorExpr>(E)->getSemanticForm());
+
     // C11 6.5.1.1p4: [A generic selection] is an lvalue, a function designator,
     // or a void expression if its result expression is, respectively, an
     // lvalue, a function designator, or a void expression.
