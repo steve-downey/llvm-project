@@ -48,13 +48,21 @@ export constexpr Tag<1> operator⊞(int, int) { return {}; }
 export constexpr Tag<2> operator⊞(double, double) { return {}; }
 export constexpr Tag<3> operator⊗(int, int) { return {}; }
 
+// The prefix form (U5): a one-parameter operator sharing a code point with a
+// two-parameter one. The node stores its arity rather than deriving it, so the
+// two stay distinguishable across the module boundary.
+export constexpr Tag<5> operator⊞(int) { return {}; }
+
 export struct Mem {
   int v;
   constexpr Tag<4> operator⊗(Mem) const { return {}; }
   constexpr int operator⊕(int n) const { return v + n; }
+  // No parameters is the member prefix form.
+  constexpr Tag<6> operator⊕() const { return {}; }
 };
 
 export constexpr int operator⊕(int a, int b) { return a + b; }
+export constexpr int operator⊕(int a) { return a + 100; }
 
 export namespace ADL {
 struct S {
@@ -67,11 +75,17 @@ constexpr int operator⊕(S a, S b) { return a.v * b.v; }
 // into the module and evaluated by the importer.
 export constexpr int module_value = 6 ⊕ 7;
 export constexpr int module_fn(int a, int b) { return a ⊕ b ⊕ 1; }
+export constexpr int module_prefix(int a) { return ⊕⊕a; }
 
 // A dependent use: unresolved when written, transformed by the importer.
 export template <class T>
 constexpr auto module_tmpl(T a, T b) -> decltype(a ⊕ b) {
   return a ⊕ b;
+}
+
+export template <class T>
+constexpr auto module_prefix_tmpl(T a) -> decltype(⊕a) {
+  return ⊕a;
 }
 
 export template <class T>
@@ -87,10 +101,15 @@ static_assert(__is_same(decltype(1.0 ⊞ 2.0), Tag<2>));
 static_assert(__is_same(decltype(1 ⊗ 2), Tag<3>));
 static_assert(__is_same(decltype(operator⊞(1, 2)), Tag<1>));
 
+// Prefix and infix uses of the same imported code point select different
+// overloads: the arity travelled with the node and with the name.
+static_assert(__is_same(decltype(⊞1), Tag<5>));
+
 // Member candidates survive: they are a property of the operator syntax.
 constexpr Mem m1{3}, m2{4};
 static_assert(__is_same(decltype(m1 ⊗ m2), Tag<4>));
 static_assert((m1 ⊕ 5) == 8);
+static_assert(__is_same(decltype(⊕m1), Tag<6>));
 
 // ADL into an imported namespace.
 constexpr ADL::S s1{3}, s2{4};
@@ -99,6 +118,9 @@ static_assert((s1 ⊕ s2) == 12);
 // Values and bodies that came off disk.
 static_assert(module_value == 13);
 static_assert(module_fn(6, 7) == 14);
+static_assert(module_prefix(1) == 201);
+static_assert(module_prefix_tmpl(1) == 101);
+static_assert(__is_same(decltype(module_prefix_tmpl(m1)), Tag<6>));
 
 // Instantiating an imported template, including for a type declared here, so
 // the operator is found by ADL at phase 2 over a deserialized body.
@@ -118,5 +140,10 @@ static_assert(!Combinable<Mem *>);
 constexpr int here(int a, int b) { return a ⊕ b ⊕ 2; }
 static_assert(here(1, 2) == 5);
 
+constexpr int here_prefix(int a) { return ⊕a; }
+static_assert(here_prefix(1) == 101);
+
 // CHECK: constexpr int here(int a, int b) {
 // CHECK-NEXT: return a ⊕ b ⊕ 2;
+// CHECK: constexpr int here_prefix(int a) {
+// CHECK-NEXT: return ⊕a;

@@ -55,6 +55,12 @@ constexpr Tag<1> operator⊞(int, int) { return {}; }
 constexpr Tag<2> operator⊞(double, double) { return {}; }
 constexpr Tag<3> operator⊞(const char *, const char *) { return {}; }
 
+// The prefix form (U5). U17 wrote and read the arity but could not run it --
+// nothing constructed a one-operand node until U12. The arity is *stored* on
+// the node rather than derived, so a prefix and an infix use of the same code
+// point must stay distinguishable across the boundary: Tag<7> against Tag<1>.
+constexpr Tag<7> operator⊞(int) { return {}; }
+
 // A second operator, so the key encoding is exercised with more than one code
 // point and a hash collision between two distinct operators would show.
 constexpr Tag<4> operator⊗(int, int) { return {}; }
@@ -66,6 +72,7 @@ constexpr Tag<5> operator⨁(int, int) { return {}; }
 
 constexpr int add(int a, int b) { return a + b; }
 constexpr int operator⊕(int a, int b) { return add(a, b); }
+constexpr int operator⊕(int a) { return a + 100; }
 
 // The data member is declared *after* the member operators only to work
 // around a pre-existing -ast-print/PCH artifact unrelated to this step:
@@ -75,6 +82,9 @@ constexpr int operator⊕(int a, int b) { return add(a, b); }
 struct Mem {
   constexpr Tag<6> operator⊗(Mem) const { return {}; }
   constexpr int operator⊕(int n) const { return v + n; }
+  // Both fixities of one code point on one class: no parameters is the prefix
+  // form, one parameter the infix form.
+  constexpr Tag<8> operator⊕() const { return {}; }
   int v;
 };
 
@@ -90,6 +100,13 @@ constexpr int header_value = 5 ⊕ 7;
 
 // A UserOperatorExpr inside a serialized function body.
 constexpr int header_fn(int a, int b) { return a ⊕ b ⊕ 1; }
+
+// A prefix UserOperatorExpr inside a serialized function body, and a dependent
+// prefix one inside a serialized template body.
+constexpr int header_prefix(int a) { return ⊕⊕a; }
+template <class T> constexpr auto header_prefix_tmpl(T a) -> decltype(⊕a) {
+  return ⊕a;
+}
 
 // A *dependent* UserOperatorExpr inside a serialized template body: nothing
 // is resolved when this is written to the PCH, so instantiating it after
@@ -182,10 +199,27 @@ static_assert(via_lambda(Late::L{3}, Late::L{4}) == 12);
 constexpr int body_fn(int a, int b) { return a ⊕ b ⊕ 2; }
 static_assert(body_fn(1, 2) == 5);
 
+// 8. The prefix form, on both sides of the boundary. Its serialization was
+//    written by U16 and read by U17, but never executed until U12 built a
+//    one-operand node.
+static_assert(__is_same(decltype(⊞1), Tag<7>));
+static_assert(__is_same(decltype(1 ⊞ 2), Tag<1>));
+static_assert(__is_same(decltype(⊕m1), Tag<8>));
+static_assert(header_prefix(1) == 201);
+static_assert(header_prefix_tmpl(1) == 101);
+static_assert(__is_same(decltype(header_prefix_tmpl(m1)), Tag<8>));
+
+constexpr int body_prefix(int a) { return ⊕a; }
+static_assert(body_prefix(1) == 101);
+
 // CHECK: constexpr int header_value = 5 ⊕ 7;
 // CHECK: constexpr int header_fn(int a, int b) {
 // CHECK-NEXT: return a ⊕ b ⊕ 1;
+// CHECK: constexpr int header_prefix(int a) {
+// CHECK-NEXT: return ⊕⊕a;
 // CHECK: constexpr int body_fn(int a, int b) {
 // CHECK-NEXT: return a ⊕ b ⊕ 2;
+// CHECK: constexpr int body_prefix(int a) {
+// CHECK-NEXT: return ⊕a;
 
 #endif

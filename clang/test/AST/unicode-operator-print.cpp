@@ -77,12 +77,54 @@ constexpr int operands(int a) { return (int)1.5 ⊞ ~a ⊞ (a ? 1 : 2); }
 static_assert(operands(0) == 4);
 
 //===----------------------------------------------------------------------===//
+// 1a. The prefix form (U5)
+//===----------------------------------------------------------------------===//
+//
+// The node records its arity rather than deriving it, so the printer knows to
+// put the glyph before its single operand -- and a prefix and an infix use of
+// the *same* code point print back distinguishably.
+
+constexpr int operator⊖(int a) { return 3 * a + 1; }
+constexpr int operator⊖(int a, int b) { return 100 * a + b; }
+
+constexpr int prefix(int a) { return ⊖a; }
+// CHECK-LABEL: constexpr int prefix(int a) {
+// CHECK-NEXT:  return ⊖a;
+static_assert(prefix(1) == 4);
+
+// Stacked prefix uses need no parentheses to print back.
+constexpr int stacked(int a) { return ⊖⊖a; }
+// CHECK-LABEL: constexpr int stacked(int a) {
+// CHECK-NEXT:  return ⊖⊖a;
+static_assert(stacked(1) == 13);
+
+// One code point, both fixities, one expression -- and the printed form
+// re-parses to the same tree, which is what the reprint diff checks.
+constexpr int both_fixities(int a, int b) { return ⊖a ⊖ b; }
+// CHECK-LABEL: constexpr int both_fixities(int a, int b) {
+// CHECK-NEXT:  return ⊖a ⊖ b;
+static_assert(both_fixities(1, 2) == 402);
+
+// Tighter than the user-infix level, which is itself tighter than `*`, so no
+// parentheses appear: this is (⊖a ⊞ 2) * (⊖b).
+constexpr int prefix_binding(int a, int b) { return ⊖a ⊞ 2 * ⊖b; }
+// CHECK-LABEL: constexpr int prefix_binding(int a, int b) {
+// CHECK-NEXT:  return ⊖a ⊞ 2 * ⊖b;
+static_assert(prefix_binding(1, 2) == 70);
+
+constexpr int prefix_parens(int a, int b) { return ⊖(a ⊞ b); }
+// CHECK-LABEL: constexpr int prefix_parens(int a, int b) {
+// CHECK-NEXT:  return ⊖(a ⊞ b);
+static_assert(prefix_parens(1, 2) == 13);
+
+//===----------------------------------------------------------------------===//
 // 2. The member form
 //===----------------------------------------------------------------------===//
 
 struct Mem {
   int v;
   constexpr int operator⊕(Mem o) const { return v + o.v + 9; }
+  constexpr int operator⊖() const { return v + 50; }
 };
 
 constexpr int member(Mem a, Mem b) { return a ⊕ b; }
@@ -97,6 +139,13 @@ constexpr int member_temporary() { return Mem{1} ⊕ Mem{2}; }
 // CHECK-LABEL: constexpr int member_temporary() {
 // CHECK-NEXT:  return Mem{1} ⊕ Mem{2};
 static_assert(member_temporary() == 12);
+
+// A member *prefix* operator is declared with no parameters (U5), and its
+// single operand is the object argument.
+constexpr int member_prefix(Mem a) { return ⊖a; }
+// CHECK-LABEL: constexpr int member_prefix(Mem a) {
+// CHECK-NEXT:  return ⊖a;
+static_assert(member_prefix(Mem{1}) == 51);
 
 //===----------------------------------------------------------------------===//
 // 3. Templates -- where the node stops being cosmetic
@@ -128,6 +177,19 @@ static_assert(dependent_member(Mem{1}, Mem{2}) == 12);
 
 // CHECK-LABEL: template<> constexpr int dependent_member<Mem>(Mem a, Mem b) {
 // CHECK-NEXT:  return a ⊕ b;
+
+// The prefix form travels the same way: a dependent prefix use is rebuilt at
+// instantiation as an operator, so the *member* candidate survives.
+template <class T> constexpr int dependent_prefix(T a) { return ⊖a; }
+// CHECK-LABEL: template <class T> constexpr int dependent_prefix(T a) {
+// CHECK-NEXT:  return ⊖a;
+static_assert(dependent_prefix(1) == 4);
+static_assert(dependent_prefix(Mem{1}) == 51);
+
+// CHECK-LABEL: template<> constexpr int dependent_prefix<int>(int a) {
+// CHECK-NEXT:  return ⊖a;
+// CHECK-LABEL: template<> constexpr int dependent_prefix<Mem>(Mem a) {
+// CHECK-NEXT:  return ⊖a;
 
 // ADL from the instantiation context still reaches a non-member declared
 // nowhere the template can see.
@@ -195,7 +257,24 @@ constexpr int assigned(Ref a, Ref b) { return ((a ⊚ b).v = 7); }
 // DUMP-NEXT:        ImplicitCastExpr {{.*}} <FunctionToPointerDecay>
 // DUMP-NEXT:          DeclRefExpr {{.*}} 'operator⊞'
 
+// DUMP-LABEL: FunctionDecl {{.*}} prefix
+// DUMP:         UserOperatorExpr {{.*}} 'int' prefix '⊖' U+2296
+// DUMP-NEXT:      CallExpr {{.*}} 'int'
+// DUMP-NEXT:        ImplicitCastExpr {{.*}} <FunctionToPointerDecay>
+// DUMP-NEXT:          DeclRefExpr {{.*}} 'operator⊖'
+
+// One code point, two fixities, one expression: the arity is on the node, so
+// the dump tells them apart.
+// DUMP-LABEL: FunctionDecl {{.*}} both_fixities
+// DUMP:         UserOperatorExpr {{.*}} 'int' infix '⊖' U+2296
+// DUMP:           UserOperatorExpr {{.*}} 'int' prefix '⊖' U+2296
+
 // DUMP-LABEL: FunctionDecl {{.*}} member
 // DUMP:         UserOperatorExpr {{.*}} 'int' infix '⊕' U+2295
 // DUMP-NEXT:      CXXMemberCallExpr {{.*}} 'int'
 // DUMP-NEXT:        MemberExpr {{.*}} .operator⊕
+
+// DUMP-LABEL: FunctionDecl {{.*}} member_prefix
+// DUMP:         UserOperatorExpr {{.*}} 'int' prefix '⊖' U+2296
+// DUMP-NEXT:      CXXMemberCallExpr {{.*}} 'int'
+// DUMP-NEXT:        MemberExpr {{.*}} .operator⊖

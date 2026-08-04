@@ -36,6 +36,7 @@ module Second {
 #pragma once
 int operator⊞(int, int);
 int operator⊗(int, int);
+int operator⊞(int);
 
 //--- first.h
 #include "shared.h"
@@ -49,6 +50,18 @@ struct SameName {
 struct SameBody {
   int v;
   int f(int a, int b) const { return a ⊞ b; }
+};
+
+// A prefix use, identical in both modules.
+struct SamePrefixBody {
+  int v;
+  int f(int a) const { return ⊞a; }
+};
+
+// Same code point, different *fixity*: a prefix use against an infix one.
+struct DifferentFixity {
+  int v;
+  int f(int a) const { return ⊞a; }
 };
 
 // Differs in the *name* of the member operator.
@@ -76,6 +89,16 @@ struct SameBody {
   int f(int a, int b) const { return a ⊞ b; }
 };
 
+struct SamePrefixBody {
+  int v;
+  int f(int a) const { return ⊞a; }
+};
+
+struct DifferentFixity {
+  int v;
+  int f(int a) const { return a ⊞ a; }
+};
+
 struct DifferentName {
   int v;
   int operator⊗(DifferentName) const;
@@ -93,6 +116,7 @@ struct DifferentBody {
 // No diagnostic for these two: same code point, same hash, silent merge.
 SameName sn;
 SameBody sb;
+SamePrefixBody spb;
 
 // A different code point in the member operator's *name*: caught by
 // ODRHash::AddDeclarationNameInfo, which hashes the code point.
@@ -105,4 +129,13 @@ DifferentName dn;
 // Stmt::ProcessODRHash.
 DifferentBody db;
 // expected-error@first.h:* {{'DifferentBody' has different definitions in different modules; first difference is definition in module 'First' found method 'f' with body}}
+// expected-note@second.h:* {{but in 'Second' found method 'f' with different body}}
+
+// The same code point used with a different *fixity* in the two bodies. The
+// statement profile does not hash the arity directly -- it does not have to:
+// the semantic forms are a one-argument and a two-argument call, so they
+// differ in their children. Recorded rather than assumed, because it is the
+// only place the arity's contribution to the ODR hash is observable.
+DifferentFixity df;
+// expected-error@first.h:* {{'DifferentFixity' has different definitions in different modules; first difference is definition in module 'First' found method 'f' with body}}
 // expected-note@second.h:* {{but in 'Second' found method 'f' with different body}}
