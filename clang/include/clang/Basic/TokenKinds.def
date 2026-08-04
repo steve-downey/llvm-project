@@ -170,6 +170,15 @@ TOK(comment)             // Comment (only in -E -C[C] mode)
 TOK(identifier)          // abcde123
 TOK(raw_identifier)      // Used only in raw lexing mode.
 
+// Unicode user-defined operator (gated behind -funicode-operators): a single
+// code point drawn from the frozen U1 set (clang/lib/Lex/UnicodeOperatorCharSets.h),
+// spelled directly as UTF-8 or by a universal-character-name.  Deliberately a
+// TOK and not a PUNCTUATOR: a PUNCTUATOR is spelled by one fixed string, and
+// this token's spelling is its own source text -- 1381 possible spellings, plus
+// their UCN forms.  Its identity is the scalar value, recovered from the
+// spelling by Lexer::getUserOperatorCodePoint().
+TOK(user_operator)       // e.g. U+229E SQUARED PLUS, spelled ⊞
+
 // C99 6.4.4.1: Integer Constants
 // C99 6.4.4.2: Floating Constants
 TOK(numeric_constant)    // 0x123
