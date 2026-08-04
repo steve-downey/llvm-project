@@ -17145,6 +17145,60 @@ bool Sema::CheckOverloadedOperatorDeclaration(FunctionDecl *FnDecl) {
   return false;
 }
 
+bool Sema::CheckUserOperatorDeclaration(FunctionDecl *FnDecl) {
+  assert(FnDecl && FnDecl->isUserOperator() &&
+         "Expected a Unicode user-defined operator declaration");
+
+  // U2: the [over.oper]p7 "at least one parameter whose type is a class, a
+  // reference to a class, an enumeration, or a reference to an enumeration"
+  // requirement is DELIBERATELY NOT APPLIED to user-defined operators, and
+  // this comment is the whole of the mechanism.
+  //
+  // That rule exists to protect the built-in meaning of an existing operator
+  // token: `int operator+(int, int)` would otherwise redefine `1 + 1`. A user
+  // operator has no built-in meaning to protect and no built-in candidates
+  // (U6), so `constexpr int operator⊞(int a, int b) { return a + b; }` is
+  // legal and `5 ⊞ 7` finding it is the motivating case of the feature.
+  //
+  // The scoping is structural rather than conditional: the check lives inside
+  // CheckOverloadedOperatorDeclaration, keyed off an OverloadedOperatorKind
+  // that no user operator has, and is unreachable from here. Every existing
+  // operator keeps it, unchanged and untouched.
+  const auto *MD = dyn_cast<CXXMethodDecl>(FnDecl);
+
+  // A member user operator is declared with an implicit object parameter --
+  // U5's arity rule is stated in terms of one ("two parameters, or one as a
+  // member"). A static member function has none, so it can name neither form.
+  // This is the same diagnostic every non-call overloaded operator gets.
+  if (MD && MD->isStatic())
+    return Diag(FnDecl->getLocation(), diag::err_operator_overload_static)
+           << FnDecl;
+
+  bool HasImplicitObjectParam = MD && MD->isImplicitObjectMemberFunction();
+
+  // U5: arity selects the form. Counting the implicit object parameter, one
+  // operand is the prefix form and two the infix form.
+  //
+  // There is no postfix form and no way to spell one: the `int` dummy
+  // parameter convention that distinguishes `operator++(T, int)` has no
+  // analogue here, so `operator⊞(T, int)` is simply an infix operator whose
+  // right operand is an `int`. Nothing about the declaration reveals that
+  // someone meant postfix, so there is nothing to diagnose here; a postfix
+  // *use* is diagnosed at the use site.
+  unsigned NumDeclaredParams = FnDecl->getNumParams();
+  unsigned NumOperands = NumDeclaredParams + (HasImplicitObjectParam ? 1 : 0);
+  if (NumOperands < 1 || NumOperands > 2)
+    return Diag(FnDecl->getLocation(), diag::err_user_operator_must_be)
+           << FnDecl->getDeclName() << (HasImplicitObjectParam ? 1 : 0)
+           << NumDeclaredParams;
+
+  // Everything else follows the ordinary function rules: defaulted and
+  // deleted definitions, constexpr/consteval, templates, variadic parameter
+  // lists and default arguments are all allowed here precisely because
+  // nothing rejects them for an ordinary function. Only arity is special.
+  return false;
+}
+
 static bool
 checkLiteralOperatorTemplateParameterList(Sema &SemaRef,
                                           FunctionTemplateDecl *TpDecl) {

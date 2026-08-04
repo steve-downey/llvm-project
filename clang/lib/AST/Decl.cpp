@@ -4121,6 +4121,12 @@ const IdentifierInfo *FunctionDecl::getLiteralIdentifier() const {
   return nullptr;
 }
 
+/// getUserOperatorCodePoint - The Unicode code point of the user-defined
+/// operator this function declares, if any (U1/U2).
+uint32_t FunctionDecl::getUserOperatorCodePoint() const {
+  return getDeclName().getCXXUserOperatorCodePoint();
+}
+
 FunctionDecl::TemplatedKind FunctionDecl::getTemplatedKind() const {
   if (TemplateOrSpecialization.isNull())
     return TK_NonTemplate;

@@ -10405,6 +10405,14 @@ def err_operator_overload_post_incdec_must_be_int : Error<
   "parameter of overloaded post-%select{increment|decrement}1 operator must "
   "have type 'int' (not %0)">;
 
+// Unicode user-defined operators (-funicode-operators). Arity selects the
+// form (U5): prefix or infix, and there is no postfix form.
+def err_user_operator_must_be : Error<
+  "user-defined operator %0 must have "
+  "%select{one parameter (prefix) or two parameters (infix)|"
+  "no parameters (prefix) or one parameter (infix)}1 "
+  "(has %2 parameter%s2)">;
+
 // C++ allocation and deallocation functions.
 def err_operator_new_delete_declared_in_namespace : Error<
   "%0 cannot be declared inside a namespace">;

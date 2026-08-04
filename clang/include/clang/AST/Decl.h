@@ -2978,6 +2978,25 @@ public:
 
   const IdentifierInfo *getLiteralIdentifier() const;
 
+  /// If this function declares a Unicode user-defined operator
+  /// (e.g. "operator⊞", -funicode-operators), retrieve the operator's code
+  /// point; otherwise 0.
+  ///
+  /// 0 is not a valid user-operator code point, so it doubles as the "not one
+  /// of these" answer -- the same convention
+  /// DeclarationName::getCXXUserOperatorCodePoint uses.
+  uint32_t getUserOperatorCodePoint() const;
+
+  /// Whether this function declaration declares a Unicode user-defined
+  /// operator, e.g. "operator⊞".
+  ///
+  /// Deliberately *not* folded into isOverloadedOperator(): that predicate
+  /// answers "which OverloadedOperatorKind is this", and a user operator has
+  /// none.  Every site that must treat the two alike has to say so -- see
+  /// Sema::CheckUserOperatorDeclaration and the setNonMemberOperator() call in
+  /// Sema::ActOnFunctionDeclarator.
+  bool isUserOperator() const { return getUserOperatorCodePoint() != 0; }
+
   /// If this function is an instantiation of a member function
   /// of a class template specialization, retrieves the function from
   /// which it was instantiated.
