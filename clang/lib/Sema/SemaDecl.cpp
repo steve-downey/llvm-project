@@ -10973,7 +10973,14 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       if (FunctionTemplate) FunctionTemplate->setAccess(Access);
     }
 
-    if (NewFD->isOverloadedOperator() && !DC->isRecord() &&
+    // A namespace-scope user-defined operator (-funicode-operators) must land
+    // in IDNS_NonMemberOperator too: Sema::LookupOperatorName looks in exactly
+    // that identifier namespace and nowhere else, and that is the lookup the
+    // operator-candidate assembly for `x ⊞ y` goes through. The predicate has
+    // to be spelled out because isOverloadedOperator() answers only for
+    // CXXOperatorName -- it is false for a user operator by construction.
+    if ((NewFD->isOverloadedOperator() || NewFD->isUserOperator()) &&
+        !DC->isRecord() &&
         PrincipalDecl->isInIdentifierNamespace(Decl::IDNS_Ordinary))
       PrincipalDecl->setNonMemberOperator();
 
@@ -12613,6 +12620,16 @@ bool Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
     // Extra checking for C++ overloaded operators (C++ [over.oper]).
     if (NewFD->isOverloadedOperator() &&
         CheckOverloadedOperatorDeclaration(NewFD)) {
+      NewFD->setInvalidDecl();
+      return Redeclaration;
+    }
+
+    // Extra checking for Unicode user-defined operators (U2, U5). A sibling
+    // of the [over.oper] check above, and deliberately a separate `if`: there
+    // is no OverloadedOperatorKind for these names, so they cannot travel
+    // through CheckOverloadedOperatorDeclaration, and the class-or-enum
+    // parameter requirement must not apply to them.
+    if (NewFD->isUserOperator() && CheckUserOperatorDeclaration(NewFD)) {
       NewFD->setInvalidDecl();
       return Redeclaration;
     }

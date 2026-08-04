@@ -6357,6 +6357,16 @@ public:
   /// otherwise, emits appropriate diagnostics and returns true.
   bool CheckOverloadedOperatorDeclaration(FunctionDecl *FnDecl);
 
+  /// CheckUserOperatorDeclaration - Check whether the declaration of this
+  /// Unicode user-defined operator (-funicode-operators) is well-formed. If
+  /// so, returns false; otherwise, emits appropriate diagnostics and returns
+  /// true.
+  ///
+  /// A sibling of CheckOverloadedOperatorDeclaration, not an extension of it:
+  /// the two paths are deliberately disjoint so that no existing operator's
+  /// rules can move (U2, U5).
+  bool CheckUserOperatorDeclaration(FunctionDecl *FnDecl);
+
   /// CheckLiteralOperatorDeclaration - Check whether the declaration
   /// of this literal operator function is well-formed. If so, returns
   /// false; otherwise, emits appropriate diagnostics and returns true.

@@ -9,6 +9,7 @@ add_distinct_clang_unittest(SemaTests
   GslOwnerPointerInference.cpp
   SemaLookupTest.cpp
   SemaNoloadLookupTest.cpp
+  UserOperatorDeclTest.cpp
   CLANG_LIBS
   clangAST
   clangASTMatchers
