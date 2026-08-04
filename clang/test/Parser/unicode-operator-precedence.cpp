@@ -70,6 +70,18 @@ template <int A, int B> constexpr Tag<2 * A + B> operator⊞(Tag<A>, Tag<B>) { r
 template <int A, int B> constexpr Tag<3 * A + B> operator⊗(Tag<A>, Tag<B>) { return {}; }
 template <int A> constexpr Tag<3 * A + 1> operator⊖(Tag<A>) { return {}; }
 
+// U04/U11: a redeclaration of the same operator, spelled as a
+// universal-character-name. If the two spellings did not collapse to one code
+// point this would declare a *second*, never-defined operator, and every
+// assertion in this file that uses `⊞` in a UCN spelling below would fail to
+// evaluate. The declaration is free; it makes the whole file's precedence
+// evidence hold for UCN spellings too, since the grammar level is a property
+// of the token kind and not of how the token was written.
+constexpr int operator\U0000229E(int a, int b);
+static_assert(1 \u229E 2 == 4);
+static_assert(1 \N{SQUARED PLUS} 2 \u229E 3 == 11);   // still left-associative
+static_assert(\u2296 1 \u229E 2 == 10);               // still prefix-tighter
+
 constexpr Tag<1> a{};
 constexpr Tag<2> b{};
 constexpr Tag<3> c{};

@@ -24,15 +24,23 @@ int operator⊞(int, int); // off-error {{character '⊞' U+229E not allowed in 
 // expected-no-diagnostics
 
 //--- Free function: declaration, then definition. One entity. ---------------
-constexpr int operator⊞(int, int);
+// U04/U11: the declaration is spelled with a named universal-character-name
+// and the definition with the glyph. This constant-evaluates only if the call
+// resolves to the *defined* declaration, i.e. only if the two occurrences
+// produced the same DeclarationName and were merged into one redeclaration
+// chain -- which is the property a -dump-tokens comparison cannot see, because
+// the code point and not the spelling is the operator's identity everywhere
+// downstream. If the two spellings decoded differently, this would be two
+// distinct operators, the first of them never defined, and the static_assert
+// would fail on an undefined function rather than on a wrong value.
+constexpr int operator\N{SQUARED PLUS}(int, int);
 constexpr int operator⊞(int a, int b) { return a + b; }
-// This constant-evaluates only if the call resolves to the *defined*
-// declaration, i.e. only if the two occurrences produced the same
-// DeclarationName and were merged into one redeclaration chain.
-// U04 has not landed, so the same declaration cannot yet be written
-// `operator\N{SQUARED PLUS}`. Once it has, add exactly that: declare with a
-// UCN spelling, define with the glyph, and this static_assert must still hold.
 static_assert(operator⊞(2, 3) == 5);
+// ... and the call may be spelled either way too, in either direction.
+static_assert(operator\U0000229E(2, 3) == 5);
+static_assert(operator\u229E(2, 3) == 5);
+static_assert(operator\u{229E}(2, 3) == 5);
+static_assert(operator\N{SQUARED PLUS}(2, 3) == 5);
 
 // CHECK: FunctionDecl {{.*}} operator⊞ 'int (int, int)'
 

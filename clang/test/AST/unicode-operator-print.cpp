@@ -25,8 +25,32 @@
 // The node itself, and the operator's identity, in -ast-dump.
 // RUN: %clang_cc1 -std=c++23 -funicode-operators -ast-dump %s \
 // RUN:   | FileCheck %s --check-prefix=DUMP
+//
+// U04/U11 spelling independence, as a diff: -DSPELL_UCN respells section 6's
+// operators as universal-character-names and changes nothing else. No spelling
+// is stored -- printOperator() re-encodes the code point as UTF-8 -- so the
+// two printed ASTs must be byte-identical. This is the one-command form of
+// "all spellings are the same operator", and it is the assertion U16 could not
+// write because U04 had not landed.
+// RUN: %clang_cc1 -std=c++23 -funicode-operators -DSPELL_UCN -ast-print %s > %t.ucn.cpp
+// RUN: diff -u %t.print.cpp %t.ucn.cpp
+// RUN: %clang_cc1 -std=c++23 -funicode-operators -DSPELL_UCN -fsyntax-only -verify %s
 
 // expected-no-diagnostics
+
+// Section 6 is compiled twice, once per spelling. The macro bodies below are
+// already *tokens* -- a UCN designating a U1 code point forms the operator
+// token in phase 3, before macro replacement -- so this is a spelling switch
+// and not a rewriting of the grammar.
+#ifdef SPELL_UCN
+#define OP_SQ \N{SQUARED PLUS}
+#define OP_CT \U00002297
+#define OP_CM \u2296
+#else
+#define OP_SQ ⊞
+#define OP_CT ⊗
+#define OP_CM ⊖
+#endif
 
 //===----------------------------------------------------------------------===//
 // 1. The infix form, as written
@@ -278,3 +302,29 @@ constexpr int assigned(Ref a, Ref b) { return ((a ⊚ b).v = 7); }
 // DUMP:         UserOperatorExpr {{.*}} 'int' prefix '⊖' U+2296
 // DUMP-NEXT:      CXXMemberCallExpr {{.*}} 'int'
 // DUMP-NEXT:        MemberExpr {{.*}} .operator⊖
+
+//===----------------------------------------------------------------------===//
+// 6. Spelling independence (U04/U11)
+//===----------------------------------------------------------------------===//
+//
+// The same functions, spelled with glyphs under the default RUN lines and with
+// universal-character-names under -DSPELL_UCN. Both compile, both evaluate to
+// the same constants, and -- the point -- both *print* the same, because the
+// node stores the code point and not the spelling. A printer that reproduced
+// the spelling would be inventing an identity the language does not have.
+
+constexpr int spelled_infix(int a, int b) { return a OP_SQ b OP_CT a; }
+// CHECK-LABEL: constexpr int spelled_infix(int a, int b) {
+// CHECK-NEXT:  return a ⊞ b ⊗ a;
+static_assert(spelled_infix(1, 2) == 3 * 4 + 1);
+
+constexpr int spelled_prefix(int a) { return OP_CM a OP_SQ a; }
+// CHECK-LABEL: constexpr int spelled_prefix(int a) {
+// CHECK-NEXT:  return ⊖a ⊞ a;
+static_assert(spelled_prefix(2) == 2 * 7 + 2);
+
+// The declaration side too: an operator-function-id spelled as a UCN prints as
+// the glyph, because DeclarationName::print re-encodes the same code point.
+constexpr int operator OP_SQ(double a, double b) { return 20; }
+// CHECK-LABEL: constexpr int operator⊞(double a, double b) {
+static_assert(operator OP_SQ(1.0, 2.0) == 20);

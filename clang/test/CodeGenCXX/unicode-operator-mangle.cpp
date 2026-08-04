@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -std=c++23 -funicode-operators -triple x86_64-linux-gnu -emit-llvm -o - %s | FileCheck %s
-// RUN: %clang_cc1 -std=c++23 -funicode-operators -fbacktick -triple x86_64-linux-gnu -emit-llvm -o - %s | FileCheck %s
+// RUN: %clang_cc1 -std=c++23 -funicode-operators -triple x86_64-linux-gnu -emit-llvm -o - %s | FileCheck --implicit-check-not=op_u0000 %s
+// RUN: %clang_cc1 -std=c++23 -funicode-operators -fbacktick -triple x86_64-linux-gnu -emit-llvm -o - %s | FileCheck --implicit-check-not=op_u0000 %s
 // RUN: %clang_cc1 -std=c++23 -funicode-operators -triple x86_64-pc-windows-msvc -emit-llvm -o /dev/null -verify=msvc -DMSVC_UNSUPPORTED %s
 
 // U09: `operator⊞` mangles through the Itanium *vendor-extended operator*
@@ -92,13 +92,29 @@ int operator⯿(S, S) { return 10; }
 // CHECK-DAG: define {{.*}} @_Zv28op_u22681SS_(
 int operator≨(S, S) { return 11; }
 
+// --- spelling independence: U04/U11 ----------------------------------------
+// The derivation reads the DeclarationName's code point; no spelling ever
+// reaches the mangler. So a universal-character-name spelling needs no
+// mangling code at all -- but that is a claim about identity, not about
+// lexing, and it is exactly the claim that would fail silently if the UCN
+// decoded to a different scalar value. Here the operator is *declared* with a
+// named UCN and *defined* with the glyph: one symbol, and no second one.
+// (--implicit-check-not=op_u0000 on the RUN lines is the specific guard: a
+// spelling that failed to decode would yield code point 0 and mangle as
+// `op_u0000`, and every dump and every -ast-print would still look correct.)
+int operator\N{SQUARED PLUS}(S, S);
+
 // --- an explicit call still resolves to the same symbol --------------------
 // CHECK-DAG: define {{.*}} @_Z8call_allv(
 // CHECK: call {{.*}} @_Zv28op_u229E1SS_(
 // CHECK: call {{.*}} @_Zv18op_u22961S(
+// ... including a call written with a UCN spelling, which must target the
+// symbol the glyph-spelled definition emitted.
+// CHECK: call {{.*}} @_Zv28op_u229E1SS_(
 int call_all() {
   S s;
-  return operator⊞(s, s) + operator⊖(s);
+  return operator⊞(s, s) + operator⊖(s) +
+         operator\N{SQUARED PLUS}(s, s);
 }
 
 // --- U-design section 9's disjointness claim -------------------------------
