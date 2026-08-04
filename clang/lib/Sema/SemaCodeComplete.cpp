@@ -3668,6 +3668,7 @@ static void AddTypedNameChunk(ASTContext &Context, const PrintingPolicy &Policy,
   case DeclarationName::CXXConversionFunctionName:
   case DeclarationName::CXXDestructorName:
   case DeclarationName::CXXLiteralOperatorName:
+  case DeclarationName::CXXUserOperatorName:
     Result.AddTypedTextChunk(
         Result.getAllocator().CopyString(ND->getNameAsString()));
     break;

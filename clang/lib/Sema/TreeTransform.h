@@ -4853,6 +4853,7 @@ TreeTransform<Derived>
   case DeclarationName::ObjCMultiArgSelector:
   case DeclarationName::CXXOperatorName:
   case DeclarationName::CXXLiteralOperatorName:
+  case DeclarationName::CXXUserOperatorName:
   case DeclarationName::CXXUsingDirective:
     return NameInfo;
 

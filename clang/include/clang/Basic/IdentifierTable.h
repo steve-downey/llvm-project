@@ -900,10 +900,18 @@ protected:
   /// are used. Note that DeclarationName depends on the numerical values
   /// of the enumerators in this enum. See DeclarationName::StoredNameKind
   /// for more info.
+  ///
+  /// ObjCMultiArgSelector *must* stay last: ExtraKindOrNumArgs encodes an
+  /// N-argument Objective-C selector as ObjCMultiArgSelector + N, so every
+  /// value at or above it is claimed. A new kind must therefore be inserted
+  /// *before* ObjCMultiArgSelector, never appended after it.
   enum ExtraKind {
     CXXDeductionGuideName,
     CXXLiteralOperatorName,
     CXXUsingDirective,
+    /// The name of a Unicode user-defined operator, e.g. operator⊞.
+    /// Only ever created under LangOptions::UnicodeOperators.
+    CXXUserOperatorName,
     ObjCMultiArgSelector
   };
 

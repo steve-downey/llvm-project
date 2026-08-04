@@ -151,6 +151,10 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
     return IsStructurallyEquivalent(Name1.getCXXLiteralIdentifier(),
                                     Name2.getCXXLiteralIdentifier());
 
+  case DeclarationName::CXXUserOperatorName:
+    return Name1.getCXXUserOperatorCodePoint() ==
+           Name2.getCXXUserOperatorCodePoint();
+
   case DeclarationName::CXXUsingDirective:
     return true; // FIXME When do we consider two using directives equal?
 

@@ -1352,6 +1352,11 @@ DeclarationNameKey::DeclarationNameKey(DeclarationName Name)
   case DeclarationName::CXXUsingDirective:
     Data = 0;
     break;
+  case DeclarationName::CXXUserOperatorName:
+    // U17: Data would be the code point; the key encoding and hash below must
+    // be decided together. Not reachable before U07.
+    llvm_unreachable("U17: Unicode user operator name serialization not "
+                     "implemented");
   }
 }
 
@@ -1378,6 +1383,10 @@ unsigned DeclarationNameKey::getHash() const {
   case DeclarationName::CXXConversionFunctionName:
   case DeclarationName::CXXUsingDirective:
     break;
+  case DeclarationName::CXXUserOperatorName:
+    // See DeclarationNameKey's constructor; U17.
+    llvm_unreachable("U17: Unicode user operator name serialization not "
+                     "implemented");
   }
 
   return ID.computeStableHash();
@@ -1427,6 +1436,10 @@ ASTDeclContextNameLookupTraitBase::ReadKeyBase(const unsigned char *&d) {
   case DeclarationName::CXXUsingDirective:
     Data = 0;
     break;
+  case DeclarationName::CXXUserOperatorName:
+    // See DeclarationNameKey's constructor; U17.
+    llvm_unreachable("U17: Unicode user operator name serialization not "
+                     "implemented");
   }
 
   return DeclarationNameKey(Kind, Data);
@@ -10332,6 +10345,9 @@ ASTRecordReader::readDeclarationNameLoc(DeclarationName Name) {
   case DeclarationName::CXXLiteralOperatorName:
     return DeclarationNameLoc::makeCXXLiteralOperatorNameLoc(
         readSourceLocation());
+
+  case DeclarationName::CXXUserOperatorName:
+    return DeclarationNameLoc::makeCXXUserOperatorNameLoc(readSourceLocation());
 
   case DeclarationName::Identifier:
   case DeclarationName::ObjCZeroArgSelector:

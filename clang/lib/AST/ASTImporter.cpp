@@ -2335,6 +2335,13 @@ ASTNodeImporter::ImportDeclarationNameLoc(
       return LocOrErr.takeError();
     return Error::success();
   }
+  case DeclarationName::CXXUserOperatorName: {
+    if (ExpectedSLoc LocOrErr = import(From.getCXXUserOperatorNameLoc()))
+      To.setCXXUserOperatorNameLoc(*LocOrErr);
+    else
+      return LocOrErr.takeError();
+    return Error::success();
+  }
   case DeclarationName::CXXConstructorName:
   case DeclarationName::CXXDestructorName:
   case DeclarationName::CXXConversionFunctionName: {
@@ -10742,6 +10749,11 @@ Expected<DeclarationName> ASTImporter::Import(DeclarationName FromName) {
   case DeclarationName::CXXLiteralOperatorName:
     return ToContext.DeclarationNames.getCXXLiteralOperatorName(
         Import(FromName.getCXXLiteralIdentifier()));
+
+  case DeclarationName::CXXUserOperatorName:
+    // The code point is context-independent, so nothing needs importing.
+    return ToContext.DeclarationNames.getCXXUserOperatorName(
+        FromName.getCXXUserOperatorCodePoint());
 
   case DeclarationName::CXXUsingDirective:
     // FIXME: STATICS!

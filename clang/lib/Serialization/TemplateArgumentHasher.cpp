@@ -161,6 +161,9 @@ void TemplateArgumentHasher::AddDeclarationName(DeclarationName Name) {
   case DeclarationName::CXXLiteralOperatorName:
     AddIdentifierInfo(Name.getCXXLiteralIdentifier());
     break;
+  case DeclarationName::CXXUserOperatorName:
+    AddInteger(Name.getCXXUserOperatorCodePoint());
+    break;
   case DeclarationName::CXXConversionFunctionName:
     AddQualType(Name.getCXXNameType());
     break;
