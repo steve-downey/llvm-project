@@ -7560,6 +7560,15 @@ public:
   void CheckStaticArrayArgument(SourceLocation CallLoc, ParmVarDecl *Param,
                                 const Expr *ArgExpr);
 
+  /// Build a use of a Unicode user-defined operator: the infix form
+  /// `LHS <op> RHS` (two operands) or the prefix form `<op> RHS` (one
+  /// operand).  The operator is identified only by its Unicode scalar value
+  /// \p CodePoint -- never by a spelling and never by an already-resolved
+  /// declaration -- so every spelling of the same operator behaves alike and
+  /// the callee stays unresolved until candidate assembly happens here.
+  ExprResult ActOnUserOperator(Scope *S, SourceLocation OpLoc,
+                               uint32_t CodePoint, MultiExprArg Operands);
+
   /// ActOnCallExpr - Handle a call to Fn with the specified array of arguments.
   /// This provides the location of the left/right parens and a list of comma
   /// locations.
@@ -11004,6 +11013,23 @@ public:
                                                 const UnresolvedSetImpl &Fns,
                                                 Expr *LHS, Expr *RHS,
                                                 FunctionDecl *DefaultedFn);
+
+  /// Create a use of a Unicode user-defined operator: the infix form
+  /// `LHS <op> RHS` (two operands) or the prefix form `<op> Operand` (one).
+  ///
+  /// A sibling of CreateOverloadedBinOp / CreateOverloadedUnaryOp rather than
+  /// a caller of them: those are keyed off an OverloadedOperatorKind, which a
+  /// user operator does not and cannot have. Candidate assembly here is
+  /// [over.match.oper]p3 without its built-in bullet (U6).
+  ///
+  /// \param OpLoc The location of the operator glyph.
+  /// \param CodePoint The Unicode scalar value identifying the operator. The
+  ///        operator is identified by this and nothing else -- never by a
+  ///        spelling, so every spelling of the same operator behaves alike.
+  /// \param Operands The one or two operands, in source order.
+  ExprResult CreateOverloadedUserOp(Scope *S, SourceLocation OpLoc,
+                                    uint32_t CodePoint,
+                                    MultiExprArg Operands);
 
   ExprResult CreateOverloadedArraySubscriptExpr(SourceLocation LLoc,
                                                 SourceLocation RLoc, Expr *Base,

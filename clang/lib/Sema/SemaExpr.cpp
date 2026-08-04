@@ -6761,6 +6761,16 @@ static void DiagnosedUnqualifiedCallsToStdFunctions(Sema &S,
       << FixItHint::CreateInsertion(DRE->getLocation(), "std::");
 }
 
+ExprResult Sema::ActOnUserOperator(Scope *S, SourceLocation OpLoc,
+                                   uint32_t CodePoint,
+                                   MultiExprArg Operands) {
+  // One action for both forms: arity is Operands.size(), 2 for the infix form
+  // and 1 for the prefix form.  Candidate assembly, ADL and the desugaring
+  // live in CreateOverloadedUserOp (SemaOverload.cpp), beside the machinery
+  // they are a sibling of.
+  return CreateOverloadedUserOp(S, OpLoc, CodePoint, Operands);
+}
+
 ExprResult Sema::ActOnCallExpr(Scope *Scope, Expr *Fn, SourceLocation LParenLoc,
                                MultiExprArg ArgExprs, SourceLocation RParenLoc,
                                Expr *ExecConfig) {

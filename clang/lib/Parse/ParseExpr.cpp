@@ -25,6 +25,7 @@
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/LocInfoType.h"
 #include "clang/Basic/PrettyStackTrace.h"
+#include "clang/Lex/Lexer.h"
 #include "clang/Lex/LiteralSupport.h"
 #include "clang/Parse/Parser.h"
 #include "clang/Parse/RAIIObjectsForParser.h"
@@ -549,6 +550,20 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
         LHS = Actions.CreateRecoveryExpr(LHS.get()->getBeginLoc(),
                                          PrevTokLocation,
                                          {LHS.get()});
+      } else if (OpToken.is(tok::user_operator)) {
+        // Desugar x <user-operator> y -> operator<user-operator>(x, y).
+        // The callee is deliberately *not* resolved here: Sema is handed the
+        // operator's code-point identity and does candidate assembly, so that
+        // ADL on both operands is the ordinary ADL of the call.
+        Expr *Args[] = {LHS.get(), RHS.get()};
+        uint32_t CodePoint = Lexer::getUserOperatorCodePoint(
+            OpToken, PP.getSourceManager(), getLangOpts());
+        LHS = Actions.ActOnUserOperator(getCurScope(), OpToken.getLocation(),
+                                        CodePoint, Args);
+        if (LHS.isInvalid())
+          LHS = Actions.CreateRecoveryExpr(Args[0]->getBeginLoc(),
+                                           Args[1]->getEndLoc(),
+                                           Args);
       } else if (TernaryMiddle.isInvalid()) {
         // If we're using '>>' as an operator within a template
         // argument list (in C++98), suggest the addition of
@@ -1181,6 +1196,46 @@ Parser::ParseCastExpression(CastParseKind ParseKind, bool isAddressOfOperand,
       Expr *Arg = Res.get();
       Res = Actions.ActOnUnaryOp(getCurScope(), SavedLoc, SavedKind, Arg,
                                  isAddressOfOperand);
+      if (Res.isInvalid())
+        Res = Actions.CreateRecoveryExpr(SavedLoc, Arg->getEndLoc(), Arg);
+    }
+    return Res;
+  }
+
+  case tok::user_operator: { // unary-expression: user-operator cast-expression
+    // The prefix form of a Unicode user-defined operator (U5).
+    //
+    // Nothing here decides prefix-vs-infix. This function is reached only in
+    // operand position; the infix form is recognized only by
+    // ParseRHSOfBinaryExpression, which runs only *after* an operand has been
+    // parsed. The expression grammar strictly alternates operand and operator
+    // positions, so the two productions can never both apply to the same
+    // token and no lookahead, whitespace rule, or consultation of what has
+    // been declared (U3) is needed to tell them apart. Do not add one: a
+    // tiebreak here would be the ambiguity that forces Swift's
+    // whitespace-sensitivity rules, and the whole of U5 is the claim that C++
+    // does not have it.
+    assert(getLangOpts().UnicodeOperators &&
+           "user-operator token without -funicode-operators");
+    if (NotPrimaryExpression)
+      *NotPrimaryExpression = true;
+    // Capture the operator's identity before consuming it: the code point is
+    // all Sema is told, so every spelling (glyph or UCN) collapses here.
+    uint32_t CodePoint = Lexer::getUserOperatorCodePoint(
+        Tok, PP.getSourceManager(), getLangOpts());
+    SourceLocation SavedLoc = ConsumeToken();
+    PreferredType.enterUnary(Actions, Tok.getLocation(), SavedKind, SavedLoc);
+    // The operand is a cast-expression, so a prefix user operator binds like
+    // the other unary operators -- tighter than any binary operator,
+    // including the user-infix level itself.
+    Res = ParseCastExpression(CastParseKind::AnyCastExpr);
+    if (!Res.isInvalid()) {
+      Expr *Arg = Res.get();
+      // Desugar <user-operator> x -> operator<user-operator>(x). Same
+      // unresolved-callee discipline as the infix form, and the same single
+      // Sema action: arity is the number of operands handed to it.
+      Expr *Args[] = {Arg};
+      Res = Actions.ActOnUserOperator(getCurScope(), SavedLoc, CodePoint, Args);
       if (Res.isInvalid())
         Res = Actions.CreateRecoveryExpr(SavedLoc, Arg->getEndLoc(), Arg);
     }

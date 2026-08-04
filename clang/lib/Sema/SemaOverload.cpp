@@ -15499,6 +15499,191 @@ void Sema::LookupOverloadedBinOp(OverloadCandidateSet &CandidateSet,
   AddBuiltinOperatorCandidates(Op, OpLoc, Args, CandidateSet);
 }
 
+/// Build a use of a Unicode user-defined operator (U6): the infix form
+/// `LHS <op> RHS` or the prefix form `<op> Operand`.
+///
+/// This is a *sibling* of CreateOverloadedBinOp / CreateOverloadedUnaryOp,
+/// not a caller of them, and the reason is structural rather than stylistic.
+/// Everything those functions do that a user operator would want is keyed off
+/// an OverloadedOperatorKind -- AddMemberOperatorCandidates,
+/// AddBuiltinOperatorCandidates, the rewritten-candidate machinery, the
+/// CXXOperatorCallExpr node -- and a user operator has no such kind by
+/// construction. That is the point: opening the operator-name table must not
+/// move any existing operator's rules, so nothing here reaches into the
+/// OverloadedOperatorKind-keyed paths and nothing there reaches into this one.
+///
+/// What *is* reused verbatim is everything keyed off a DeclarationName
+/// instead: AddNonMemberOperatorCandidates, AddMethodCandidate,
+/// AddArgumentDependentLookupCandidates, BestViableFunction, and -- for the
+/// result -- the ordinary call and member-call builders. The genuinely new
+/// code is candidate assembly and nothing else.
+///
+/// Candidate assembly is [over.match.oper]p3 minus its third bullet:
+///
+///   - member candidates: the qualified lookup of T1::operator<op>, where T1
+///     is the type of the left (or only) operand;
+///   - non-member candidates: unqualified lookup of operator<op> plus ADL on
+///     the operands -- normative, and the reason the callee is never resolved
+///     before overload resolution sees the arguments;
+///   - built-in candidates: NONE. There are no built-in meanings for a user
+///     operator (U2), so there is nothing for built-in candidates to model.
+///     `1 <op> 2` with no operator<op> declared is a lookup failure that names
+///     the operator -- never an arithmetic fallback, and never a lexing or
+///     parsing error (U3). The implementation of that rule is the deliberate
+///     *absence* of a call to AddBuiltinOperatorCandidates below; do not add
+///     one.
+ExprResult Sema::CreateOverloadedUserOp(Scope *S, SourceLocation OpLoc,
+                                        uint32_t CodePoint,
+                                        MultiExprArg Operands) {
+  assert(CodePoint && "user operator with no code-point identity");
+  assert((Operands.size() == 1 || Operands.size() == 2) &&
+         "user operators are prefix (1 operand) or infix (2)");
+
+  SourceLocation EndLoc = Operands.back()->getEndLoc();
+  DeclarationName OpName =
+      Context.DeclarationNames.getCXXUserOperatorName(CodePoint);
+  DeclarationNameInfo OpNameInfo(OpName, OpLoc);
+  OpNameInfo.setCXXUserOperatorNameLoc(OpLoc);
+
+  // The non-member half: unqualified operator lookup, which by definition
+  // ignores member functions (LookupOperatorName searches
+  // Decl::IDNS_NonMemberOperator).
+  LookupResult Operators(*this, OpNameInfo, LookupOperatorName);
+  LookupName(Operators, S);
+  assert(!Operators.isAmbiguous() && "Operator lookup cannot be ambiguous");
+  UnresolvedSet<8> Fns;
+  Fns.append(Operators.begin(), Operators.end());
+
+  // Build the non-member form as an ordinary call through an *unresolved*
+  // callee. Keeping the callee unresolved is what makes ADL happen inside
+  // overload resolution, with the arguments in hand; picking a FunctionDecl
+  // first would stop at a non-viable ordinary-lookup candidate and never
+  // reach the ADL one.
+  auto BuildNonMemberForm = [&]() -> ExprResult {
+    ExprResult Fn = CreateUnresolvedLookupExpr(
+        /*NamingClass=*/nullptr, NestedNameSpecifierLoc(), OpNameInfo, Fns,
+        /*PerformADL=*/true);
+    if (Fn.isInvalid())
+      return ExprError();
+    return BuildCallExpr(S, Fn.get(), OpLoc, Operands, EndLoc);
+  };
+
+  // Dependent operands: decide nothing. Build the dependent call and let the
+  // ordinary two-phase machinery re-resolve it at instantiation, performing
+  // ADL from the instantiation context. This is inherited, not reimplemented.
+  //
+  // FIXME(U16): a dependent *member* user operator is lost this way, because
+  // the rebuilt expression is an ordinary CallExpr and TreeTransform has no
+  // way to know the operator syntax was used. Recording that in a dedicated
+  // AST node -- which is what CXXOperatorCallExpr does for the existing
+  // operators -- is U16's job and closes this hole.
+  for (Expr *E : Operands)
+    if (E->isTypeDependent())
+      return BuildNonMemberForm();
+
+  for (Expr *&E : Operands)
+    if (checkPlaceholderForOverload(*this, E))
+      return ExprError();
+
+  // C++ [over.match.oper]p3:
+  //   -- If T1 is a complete class type or a class currently being defined,
+  //      the set of member candidates is the result of the qualified lookup
+  //      of T1::operator@; otherwise, the set of member candidates is empty.
+  QualType T1 = Operands[0]->getType();
+  LookupResult MemberCands(*this, OpNameInfo, LookupOrdinaryName);
+  if (T1->isRecordType()) {
+    bool IsComplete = isCompleteType(OpLoc, T1);
+    if (auto *T1RD = T1->getAsCXXRecordDecl();
+        T1RD && (IsComplete || T1RD->isBeingDefined())) {
+      LookupQualifiedName(MemberCands, T1RD);
+      MemberCands.suppressAccessDiagnostics();
+    }
+  }
+
+  // With no member candidates the union is exactly the non-member set, so the
+  // ordinary call path already computes it -- including ADL, and including
+  // "use of undeclared 'operator<op>'" when nothing is found at all. Note
+  // that the call path adds no built-in candidates either; the no-built-ins
+  // rule holds on both sides of this branch.
+  if (MemberCands.empty())
+    return BuildNonMemberForm();
+
+  OverloadCandidateSet CandidateSet(OpLoc, OverloadCandidateSet::CSK_Operator);
+  ArrayRef<Expr *> Args = Operands;
+
+  AddNonMemberOperatorCandidates(Fns, Args, CandidateSet);
+
+  // The member candidates. This loop is the one thing
+  // AddMemberOperatorCandidates cannot be asked for: its first line is
+  // getCXXOperatorName(Op). Everything after that line is reproduced here
+  // unchanged, minus the reversed/rewritten arm, which has no user-operator
+  // analogue.
+  for (LookupResult::iterator Oper = MemberCands.begin(),
+                              OperEnd = MemberCands.end();
+       Oper != OperEnd; ++Oper)
+    AddMethodCandidate(Oper.getPair(), Args[0]->getType(),
+                       Args[0]->Classify(Context), Args.slice(1), CandidateSet,
+                       /*SuppressUserConversions=*/false);
+
+  AddArgumentDependentLookupCandidates(OpName, OpLoc, Args,
+                                       /*ExplicitTemplateArgs=*/nullptr,
+                                       CandidateSet);
+
+  // *** No AddBuiltinOperatorCandidates call. See the comment above. ***
+
+  SourceRange OpRange(Operands.front()->getBeginLoc(), EndLoc);
+  OverloadCandidateSet::iterator Best;
+  switch (CandidateSet.BestViableFunction(*this, OpLoc, Best)) {
+  case OR_Success: {
+    if (!isa<CXXMethodDecl>(Best->Function)) {
+      // A non-member won the unified set, so it also wins the non-member set
+      // on its own; the ordinary call path selects the same function and
+      // builds the same call.
+      return BuildNonMemberForm();
+    }
+
+    // Member form. The desugaring is literally `x.operator<op>(y)`, so build
+    // exactly that and let the member-call path do the object conversion,
+    // access checking, argument initialization and result binding. Overload
+    // resolution among the members alone reaches the same function: the best
+    // viable candidate of the union is a fortiori the best viable candidate
+    // of the member subset it belongs to.
+    LookupResult Found(*this, OpNameInfo, LookupOrdinaryName);
+    LookupQualifiedName(Found, T1->getAsCXXRecordDecl());
+    CXXScopeSpec SS;
+    ExprResult Base = BuildMemberReferenceExpr(
+        Operands[0], Operands[0]->getType(), OpLoc, /*IsArrow=*/false, SS,
+        /*TemplateKWLoc=*/SourceLocation(), /*FirstQualifierInScope=*/nullptr,
+        Found, /*TemplateArgs=*/nullptr, S);
+    if (Base.isInvalid())
+      return ExprError();
+    return BuildCallExpr(S, Base.get(), OpLoc, Operands.drop_front(), EndLoc);
+  }
+
+  case OR_No_Viable_Function:
+    CandidateSet.NoteCandidates(
+        PartialDiagnosticAt(OpLoc,
+                            PDiag(diag::err_ovl_no_viable_function_in_call)
+                                << OpName << OpRange),
+        *this, OCD_AllCandidates, Args);
+    return ExprError();
+
+  case OR_Ambiguous:
+    CandidateSet.NoteCandidates(
+        PartialDiagnosticAt(OpLoc, PDiag(diag::err_ovl_ambiguous_call)
+                                       << OpName << OpRange),
+        *this, OCD_AmbiguousCandidates, Args);
+    return ExprError();
+
+  case OR_Deleted:
+    DiagnoseUseOfDeletedFunction(OpLoc, OpRange, OpName, CandidateSet,
+                                 Best->Function, Operands);
+    return ExprError();
+  }
+
+  llvm_unreachable("unexpected overload resolution result");
+}
+
 ExprResult Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
                                        BinaryOperatorKind Opc,
                                        const UnresolvedSetImpl &Fns, Expr *LHS,
