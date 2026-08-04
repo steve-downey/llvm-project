@@ -6774,46 +6774,11 @@ ExprResult Sema::ActOnBacktickOperator(Scope *S, SourceLocation OpenLoc,
 ExprResult Sema::ActOnUserOperator(Scope *S, SourceLocation OpLoc,
                                    uint32_t CodePoint,
                                    MultiExprArg Operands) {
-  assert(CodePoint && "user operator with no code-point identity");
-  assert((Operands.size() == 1 || Operands.size() == 2) &&
-         "user operators are prefix (1 operand) or infix (2)");
-
-  // *** U11 STUB -- U13 replaces this body. ***
-  //
-  // What this does: unqualified operator lookup for operator<op>, then an
-  // ordinary overloaded call with the callee left unresolved so that
-  // BuildCallExpr performs ADL on the operands.  Keeping the callee
-  // unresolved is the whole point: an implementation that picked a
-  // FunctionDecl here would stop at a non-viable ordinary-lookup candidate
-  // and never reach the ADL one (the GCC DEV-G05 defect).
-  //
-  // What it deliberately does NOT do, and U13 must add:
-  //   - member candidates from the left operand's class (x.operator<op>(y)),
-  //     so a member user operator is not found by this stub at all;
-  //   - the explicit statement that there are *no* built-in candidates (U6);
-  //   - a dedicated AST node recording the operator token (U16), rather than
-  //     the bare CallExpr built here.
-  DeclarationNameInfo NameInfo(
-      Context.DeclarationNames.getCXXUserOperatorName(CodePoint), OpLoc);
-  NameInfo.setCXXUserOperatorNameLoc(OpLoc);
-
-  // C++ [over.match.oper]p3: non-member candidates come from the unqualified
-  // lookup of the operator name, ignoring member functions.
-  LookupResult Operators(*this, NameInfo, LookupOperatorName);
-  LookupName(Operators, S);
-  assert(!Operators.isAmbiguous() && "Operator lookup cannot be ambiguous");
-
-  UnresolvedSet<8> Fns;
-  Fns.append(Operators.begin(), Operators.end());
-
-  ExprResult Fn = CreateUnresolvedLookupExpr(/*NamingClass=*/nullptr,
-                                             NestedNameSpecifierLoc(), NameInfo,
-                                             Fns, /*PerformADL=*/true);
-  if (Fn.isInvalid())
-    return ExprError();
-
-  return BuildCallExpr(S, Fn.get(), OpLoc, Operands,
-                       Operands.back()->getEndLoc());
+  // One action for both forms: arity is Operands.size(), 2 for the infix form
+  // and 1 for the prefix form.  Candidate assembly, ADL and the desugaring
+  // live in CreateOverloadedUserOp (SemaOverload.cpp), beside the machinery
+  // they are a sibling of.
+  return CreateOverloadedUserOp(S, OpLoc, CodePoint, Operands);
 }
 
 ExprResult Sema::ActOnCallExpr(Scope *Scope, Expr *Fn, SourceLocation LParenLoc,
