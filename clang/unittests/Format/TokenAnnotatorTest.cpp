@@ -4588,6 +4588,76 @@ TEST_F(TokenAnnotatorTest, CSharpUtf8StringLiterals) {
   EXPECT_TOKEN(Tokens[4], tok::identifier, TT_Unknown);
 }
 
+TEST_F(TokenAnnotatorTest, UnicodeOperatorTokenTypes) {
+  // Infix use: after an operand, a user operator is an ordinary binary
+  // operator -- spaces on both sides.
+  auto Tokens = annotate("a ⊞ b;");
+  ASSERT_EQ(Tokens.size(), 5u) << Tokens;
+  EXPECT_TOKEN(Tokens[1], tok::user_operator, TT_BinaryOperator);
+  EXPECT_EQ(Tokens[1]->SpacesRequiredBefore, 1u);
+  EXPECT_EQ(Tokens[2]->SpacesRequiredBefore, 1u);
+  // Multi-byte UTF-8, display width 1.  clang-format's existing extended
+  // character handling covers this; nothing in this feature reimplements it.
+  EXPECT_EQ(Tokens[1]->TokenText.size(), 3u);
+  EXPECT_EQ(Tokens[1]->ColumnWidth, 1u);
+
+  // Adjacency does not change the classification -- position does.
+  Tokens = annotate("a⊞b;");
+  ASSERT_EQ(Tokens.size(), 5u) << Tokens;
+  EXPECT_TOKEN(Tokens[0], tok::identifier, TT_Unknown);
+  EXPECT_TOKEN(Tokens[1], tok::user_operator, TT_BinaryOperator);
+  EXPECT_TOKEN(Tokens[2], tok::identifier, TT_Unknown);
+
+  // Prefix use: in operand position it is a unary operator and hugs its
+  // operand.  No lookahead and no declaration lookup is involved, exactly as
+  // in the parser.
+  Tokens = annotate("x = ⊖a;");
+  ASSERT_EQ(Tokens.size(), 6u) << Tokens;
+  EXPECT_TOKEN(Tokens[2], tok::user_operator, TT_UnaryOperator);
+  EXPECT_EQ(Tokens[2]->SpacesRequiredBefore, 1u);
+  EXPECT_EQ(Tokens[3]->SpacesRequiredBefore, 0u);
+
+  // A user operator is not an operand, so the next one is prefix again.
+  Tokens = annotate("x = a ⊞ ⊖b;");
+  ASSERT_EQ(Tokens.size(), 8u) << Tokens;
+  EXPECT_TOKEN(Tokens[3], tok::user_operator, TT_BinaryOperator);
+  EXPECT_TOKEN(Tokens[4], tok::user_operator, TT_UnaryOperator);
+
+  // Declaration: the kw_operator handler rewrites the unary annotation to
+  // TT_OverloadedOperator, exactly as it does for `operator+`, so the glyph
+  // stays welded to the `operator` keyword.
+  Tokens = annotate("int operator⊞(int, int);");
+  ASSERT_EQ(Tokens.size(), 10u) << Tokens;
+  EXPECT_TOKEN(Tokens[2], tok::user_operator, TT_OverloadedOperator);
+  EXPECT_EQ(Tokens[2]->SpacesRequiredBefore, 0u);
+  EXPECT_FALSE(Tokens[2]->CanBreakBefore);
+
+  // UCN spellings are the same token kind, so they get the same annotation
+  // and differ only in width.
+  Tokens = annotate("a \\N{SQUARED PLUS} b;");
+  ASSERT_EQ(Tokens.size(), 5u) << Tokens;
+  EXPECT_TOKEN(Tokens[1], tok::user_operator, TT_BinaryOperator);
+  EXPECT_EQ(Tokens[1]->ColumnWidth, 16u);
+  Tokens = annotate("int operator\\U0000229E(int, int);");
+  ASSERT_EQ(Tokens.size(), 10u) << Tokens;
+  EXPECT_TOKEN(Tokens[2], tok::user_operator, TT_OverloadedOperator);
+  EXPECT_EQ(Tokens[2]->ColumnWidth, 10u);
+
+  // An excluded code point is not a user operator.  Enabling the feature in
+  // the format path does turn on the lexer's exclusion handling, so U+2212 now
+  // ends the identifier before it instead of being absorbed into it -- but it
+  // becomes a tok::unknown, which FormatTokenLexer types as
+  // TT_ImplicitStringLiteral, i.e. "preserve the surrounding whitespace".  So
+  // formatting of source containing one is unchanged in both directions: it is
+  // never respaced into something that looks like an operator (U§5).
+  Tokens = annotate("a−b;");
+  ASSERT_EQ(Tokens.size(), 5u) << Tokens;
+  EXPECT_TOKEN(Tokens[0], tok::identifier, TT_Unknown);
+  EXPECT_EQ(Tokens[0]->TokenText, "a");
+  EXPECT_TOKEN(Tokens[1], tok::unknown, TT_ImplicitStringLiteral);
+  EXPECT_TOKEN(Tokens[2], tok::identifier, TT_Unknown);
+}
+
 } // namespace
 } // namespace format
 } // namespace clang

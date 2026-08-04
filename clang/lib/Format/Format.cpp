@@ -4550,6 +4550,15 @@ LangOptions getFormattingLangOpts(const FormatStyle &Style) {
   LangOpts.DeclSpecKeyword = 1; // To get __declspec.
   LangOpts.C99 = 1; // To get kw_restrict for non-underscore-prefixed restrict.
 
+  if (Style.Language == FormatStyle::LK_Cpp ||
+      Style.Language == FormatStyle::LK_ObjC) {
+    // Lex Unicode user-defined operator code points as tok::user_operator so
+    // the annotator can classify them.  Keyed on the language rather than on
+    // LangOpts.CPlusPlus, because JS/Java/C# fall through to the same
+    // `default:` arm and also set CPlusPlus = 1.
+    LangOpts.UnicodeOperators = 1;
+  }
+
   return LangOpts;
 }
 

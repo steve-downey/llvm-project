@@ -44,6 +44,19 @@ static bool startsWithInitStatement(const AnnotatedLine &Line) {
          Line.startsWith(tok::kw_switch);
 }
 
+/// Returns \c true if \p Prev (which may be null) ends an operand, i.e. if a
+/// user-introduced infix operator appearing right after it would be infix
+/// rather than prefix.
+///
+/// This is the formatter's copy of the rule the parser uses: fixity is decided
+/// by position alone, with no lookahead and no declaration lookup.
+static bool endsOperand(const FormatToken *Prev) {
+  return Prev && (Prev->Tok.isLiteral() ||
+                  Prev->isOneOf(tok::identifier, tok::r_paren, tok::r_square,
+                                tok::r_brace, tok::kw_true, tok::kw_false,
+                                tok::kw_nullptr, tok::kw_this));
+}
+
 /// Returns \c true if the token can be used as an identifier in
 /// an Objective-C \c \@selector, \c false otherwise.
 ///
@@ -2412,6 +2425,19 @@ private:
   void determineTokenType(FormatToken &Current) {
     if (Current.isNot(TT_Unknown)) {
       // The token type is already known.
+      return;
+    }
+
+    // A Unicode user-defined operator is infix after an operand and prefix
+    // otherwise -- position decides, exactly as in the parser.  Everything
+    // else (spacing, breaking, penalties) then falls out of the existing
+    // TT_BinaryOperator / TT_UnaryOperator handling; in an operator-function-id
+    // the kw_operator handler below rewrites TT_UnaryOperator to
+    // TT_OverloadedOperator, just as it does for `operator+`.
+    if (IsCpp && Current.is(tok::user_operator)) {
+      Current.setType(endsOperand(Current.getPreviousNonComment())
+                          ? TT_BinaryOperator
+                          : TT_UnaryOperator);
       return;
     }
 
