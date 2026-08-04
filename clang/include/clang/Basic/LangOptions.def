@@ -534,6 +534,7 @@ LANGOPT(EnableLifetimeSafetyTUAnalysis, 1, 0, Benign, "Lifetime safety at transl
 LANGOPT(PreserveVec3Type, 1, 0, NotCompatible, "Preserve 3-component vector type")
 LANGOPT(Reflection      , 1, 0, NotCompatible, "C++26 Reflection")
 LANGOPT(Backtick        , 1, 0, NotCompatible, "backtick operator and identifier escaping")
+LANGOPT(UnicodeOperators, 1, 0, NotCompatible, "Unicode user-defined operators")
 
 LANGOPT(StablePointerSubtraction, 1, 0, NotCompatible, "Make unaligned pointer subtraction stable")
 
