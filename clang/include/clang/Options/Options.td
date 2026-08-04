@@ -4067,6 +4067,10 @@ defm backtick : BoolFOption<"backtick",
   LangOpts<"Backtick">, DefaultFalse,
   PosFlag<SetTrue, [], [], "Enable backtick infix operator and identifier escaping">,
   NegFlag<SetFalse>, BothFlags<[], [ClangOption, CC1Option]>>;
+defm unicode_operators : BoolFOption<"unicode-operators",
+  LangOpts<"UnicodeOperators">, DefaultFalse,
+  PosFlag<SetTrue, [], [], "Enable Unicode user-defined operators">,
+  NegFlag<SetFalse>, BothFlags<[], [ClangOption, CC1Option]>>;
 defm sized_deallocation : BoolFOption<"sized-deallocation",
   LangOpts<"SizedDeallocation">, Default<cpp14.KeyPath>,
   PosFlag<SetTrue, [], [], "Enable C++14 sized global deallocation functions">,
