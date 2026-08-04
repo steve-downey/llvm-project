@@ -40,14 +40,21 @@ namespace prec {
     Additive        = 13,   // -, +
     Multiplicative  = 14,   // *, /, %
     PointerToMember = 15,   // .*, ->*
-    Backtick        = 16    // x `f` y
+    UserInfix       = 16    // x `f` y, x <user-operator> y
   };
 }
 
 /// Return the precedence of the specified binary operator token.
+///
+/// \p BacktickIsOperator is false while parsing the operator slot of a
+/// backtick-expression, where a backtick closes the slot rather than
+/// starting a new operator.  \p UnicodeOperatorsEnabled says whether
+/// tok::user_operator is an infix operator in this translation unit; it is
+/// LangOptions::UnicodeOperators.
 prec::Level getBinOpPrecedence(tok::TokenKind Kind, bool GreaterThanIsOperator,
                                bool CPlusPlus11,
-                               bool BacktickIsOperator = true);
+                               bool BacktickIsOperator = true,
+                               bool UnicodeOperatorsEnabled = false);
 
 }  // end namespace clang
 

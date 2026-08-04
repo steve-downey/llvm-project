@@ -25,6 +25,7 @@
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/LocInfoType.h"
 #include "clang/Basic/PrettyStackTrace.h"
+#include "clang/Lex/Lexer.h"
 #include "clang/Lex/LiteralSupport.h"
 #include "clang/Parse/Parser.h"
 #include "clang/Parse/RAIIObjectsForParser.h"
@@ -305,7 +306,7 @@ bool Parser::isNotExpressionStart() {
 
 bool Parser::isFoldOperator(prec::Level Level) const {
   return Level > prec::Unknown && Level != prec::Conditional &&
-         Level != prec::Spaceship && Level != prec::Backtick;
+         Level != prec::Spaceship && Level != prec::UserInfix;
 }
 
 bool Parser::isFoldOperator(tok::TokenKind Kind) const {
@@ -317,7 +318,8 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
   prec::Level NextTokPrec = getBinOpPrecedence(Tok.getKind(),
                                                GreaterThanIsOperator,
                                                getLangOpts().CPlusPlus11,
-                                               BacktickIsOperator);
+                                               BacktickIsOperator,
+                                               getLangOpts().UnicodeOperators);
   SourceLocation ColonLoc;
 
   auto SavedType = PreferredType;
@@ -525,7 +527,8 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
     prec::Level ThisPrec = NextTokPrec;
     NextTokPrec = getBinOpPrecedence(Tok.getKind(), GreaterThanIsOperator,
                                      getLangOpts().CPlusPlus11,
-                                     BacktickIsOperator);
+                                     BacktickIsOperator,
+                                     getLangOpts().UnicodeOperators);
 
     // Assignment and conditional expressions are right-associative.
     bool isRightAssoc = ThisPrec == prec::Conditional ||
@@ -555,7 +558,8 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
 
       NextTokPrec = getBinOpPrecedence(Tok.getKind(), GreaterThanIsOperator,
                                        getLangOpts().CPlusPlus11,
-                                       BacktickIsOperator);
+                                       BacktickIsOperator,
+                                       getLangOpts().UnicodeOperators);
     }
 
     if (!RHS.isInvalid() && RHSIsInitList) {
@@ -589,6 +593,20 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
                                             BacktickOp.get(),
                                             BacktickCloseLoc,
                                             LHS.get(), RHS.get());
+        if (LHS.isInvalid())
+          LHS = Actions.CreateRecoveryExpr(Args[0]->getBeginLoc(),
+                                           Args[1]->getEndLoc(),
+                                           Args);
+      } else if (OpToken.is(tok::user_operator)) {
+        // Desugar x <user-operator> y -> operator<user-operator>(x, y).
+        // The callee is deliberately *not* resolved here: Sema is handed the
+        // operator's code-point identity and does candidate assembly, so that
+        // ADL on both operands is the ordinary ADL of the call.
+        Expr *Args[] = {LHS.get(), RHS.get()};
+        uint32_t CodePoint = Lexer::getUserOperatorCodePoint(
+            OpToken, PP.getSourceManager(), getLangOpts());
+        LHS = Actions.ActOnUserOperator(getCurScope(), OpToken.getLocation(),
+                                        CodePoint, Args);
         if (LHS.isInvalid())
           LHS = Actions.CreateRecoveryExpr(Args[0]->getBeginLoc(),
                                            Args[1]->getEndLoc(),

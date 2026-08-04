@@ -15,10 +15,19 @@
 namespace clang {
 
 prec::Level getBinOpPrecedence(tok::TokenKind Kind, bool GreaterThanIsOperator,
-                               bool CPlusPlus11, bool BacktickIsOperator) {
+                               bool CPlusPlus11, bool BacktickIsOperator,
+                               bool UnicodeOperatorsEnabled) {
   switch (Kind) {
   case tok::backtick:
-    return BacktickIsOperator ? prec::Backtick : prec::Unknown;
+    return BacktickIsOperator ? prec::UserInfix : prec::Unknown;
+
+  case tok::user_operator:
+    // A Unicode user-defined operator occupies the *same* level as the
+    // backtick infix operator: one level for all user-introduced infix
+    // syntax, so mixed chains group left with no extra table to learn.
+    // The lexer only ever produces this token when the feature is on; the
+    // flag is checked here too so the level is gated where it is defined.
+    return UnicodeOperatorsEnabled ? prec::UserInfix : prec::Unknown;
   case tok::greater:
     // C++ [temp.names]p3:
     //   [...] When parsing a template-argument-list, the first
