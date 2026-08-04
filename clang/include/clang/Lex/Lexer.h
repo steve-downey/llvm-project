@@ -407,6 +407,18 @@ public:
                                            const SourceManager &SourceMgr,
                                            const LangOptions &LangOpts);
 
+  /// True if \p CodePoint is one of the three code points U1 excludes because
+  /// TR31 §7.1's mathematical notation profile cedes them to the *identifier*
+  /// side — U+2202 ∂, U+2207 ∇, U+221E ∞ (U§5 predicate 5, U§7.1).
+  ///
+  /// Unlike every other exclusion these are perfectly good identifier
+  /// characters here — Clang's D137051 extension admits them by default — so
+  /// the lexer must not diagnose them, and only a caller that already knows an
+  /// *operator* was meant can say why one of them is not one. That caller is
+  /// the operator-function-id parse; this predicate exists so it need not
+  /// reach into the Lex library's generated tables.
+  static bool isUserOperatorIdentifierProfileExclusion(uint32_t CodePoint);
+
   /// Relex the token at the specified location.
   /// \returns true if there was a failure, false on success.
   static bool getRawToken(SourceLocation Loc, Token &Result,
@@ -868,12 +880,48 @@ private:
   /// cannot drift away from "a literal glyph is that operator token".
   bool isUserOperatorCodePoint(uint32_t CodePoint) const;
 
+  /// True if \p CodePoint is a named exclusion from U1 whose reason the
+  /// *lexer* can give (U05): a UTS #39 confusable of an existing token, or an
+  /// emoji-presentation character. Both are characters that could not have
+  /// been meant as anything but an operator, so classifying them is
+  /// context-free.
+  ///
+  /// The mathematical-notation-profile exclusions (∂ ∇ ∞) are deliberately
+  /// not included: they are valid identifier characters here, so the lexer has
+  /// nothing to say about them. The three reasons in the U02 table do not all
+  /// have the same scope, which U§8 does not anticipate.
+  ///
+  /// Asked at all four classification sites, so an excluded code point neither
+  /// forms an operator token nor is absorbed into an identifier.
+  bool isDiagnosableOperatorExclusion(uint32_t CodePoint) const;
+
   /// Form a tok::user_operator token ending at \p CurPtr. The caller has
   /// already decoded the code point and classified it with
   /// isUserOperatorCodePoint; the token carries no payload, so the spelling
   /// (glyph or UCN) is all that is recorded and
   /// Lexer::getUserOperatorCodePoint decodes it back on demand.
   bool LexUserOperator(Token &Result, const char *CurPtr);
+
+  /// Diagnose \p CodePoint as a *named exclusion* from the U1 set and form a
+  /// tok::unknown token for it (U05, U§5 predicate 5, U§10).
+  ///
+  /// Called from both token-formation classification sites, after
+  /// isUserOperatorCodePoint has said no and before the identifier
+  /// classification, so the glyph and universal-character-name spellings of an
+  /// excluded code point get the same message and the same token — which is
+  /// what U11's "the spellings are equivalent" has to mean for a spelling that
+  /// is ill-formed.
+  ///
+  /// Only the reasons whose code points could not be anything *but* an
+  /// operator are handled here: ConfusableWith and EmojiPresentation.
+  /// IdentifierProfile (∂ ∇ ∞) is deliberately not, because those three are
+  /// valid identifier characters in this compiler — see
+  /// note_unicode_operator_identifier_profile.
+  ///
+  /// \return \c true if a diagnostic was emitted and \p Result was formed;
+  ///         \c false to fall through to the unchanged upstream path.
+  bool LexExcludedOperator(Token &Result, uint32_t CodePoint,
+                           const char *CurPtr);
 };
 
 } // namespace clang

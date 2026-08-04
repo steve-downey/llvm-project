@@ -598,6 +598,11 @@ uint32_t Lexer::getUserOperatorCodePoint(const Token &Tok,
   return getUserOperatorCodePoint(Spelling);
 }
 
+bool Lexer::isUserOperatorIdentifierProfileExclusion(uint32_t CodePoint) {
+  return getExclusionReason(CodePoint) ==
+         UserOperatorExclusionReason::IdentifierProfile;
+}
+
 /// MeasureTokenLength - Relex the token at the specified location and return
 /// its length in bytes in the input file.  If the token needs cleaning (e.g.
 /// includes a trigraph or an escaped newline) then this count includes bytes
@@ -1959,6 +1964,13 @@ bool Lexer::tryConsumeIdentifierUCN(const char *&CurPtr, unsigned Size,
     if (isUserOperatorCodePoint(CodePoint))
       return false;
 
+    // U05: and so does a named exclusion, for the same reason -- this is the
+    // UCN half of the rule, so an excluded code point spelled as a
+    // universal-character-name next to an identifier reports what the glyph
+    // reports.
+    if (isDiagnosableOperatorExclusion(CodePoint))
+      return false;
+
     bool DiagnoseAndContinue = !isLexingRawMode() &&
                                !ParsingPreprocessorDirective &&
                                !PP->isPreprocessedOutput();
@@ -2022,6 +2034,14 @@ bool Lexer::tryConsumeIdentifierUTF8Char(const char *&CurPtr, Token &Result) {
     if (isUserOperatorCodePoint(CodePoint))
       return false;
 
+    // U05: a *named exclusion* likewise ends the identifier rather than being
+    // absorbed, so that LexExcludedOperator can give the reason.  Without this
+    // `a−b` would report only "character '−' not allowed in an identifier",
+    // which is true and unhelpful: the interesting fact about U+2212 here is
+    // that it is confusable with '-'.
+    if (isDiagnosableOperatorExclusion(CodePoint))
+      return false;
+
     bool DiagnoseAndContinue = !isLexingRawMode() &&
                                !ParsingPreprocessorDirective &&
                                !PP->isPreprocessedOutput();
@@ -2059,9 +2079,79 @@ bool Lexer::isUserOperatorCodePoint(uint32_t CodePoint) const {
   return LangOpts.UnicodeOperators && isUserOperatorChar(CodePoint);
 }
 
+bool Lexer::isDiagnosableOperatorExclusion(uint32_t CodePoint) const {
+  if (!LangOpts.UnicodeOperators)
+    return false;
+  switch (getExclusionReason(CodePoint)) {
+  case UserOperatorExclusionReason::ConfusableWith:
+  case UserOperatorExclusionReason::EmojiPresentation:
+    return true;
+  case UserOperatorExclusionReason::IdentifierProfile:
+  case UserOperatorExclusionReason::None:
+    // ∂ ∇ ∞ are the exclusions that are *identifier* characters here; the
+    // lexer must leave them alone entirely (U§7.1).
+    return false;
+  }
+  llvm_unreachable("unhandled UserOperatorExclusionReason");
+}
+
 bool Lexer::LexUserOperator(Token &Result, const char *CurPtr) {
   MIOpt.ReadToken();
   FormTokenWithChars(Result, CurPtr, tok::user_operator);
+  return true;
+}
+
+bool Lexer::LexExcludedOperator(Token &Result, uint32_t CodePoint,
+                                const char *CurPtr) {
+  // Off the flag this is upstream's tree, byte for byte.  In raw mode there is
+  // no Preprocessor to diagnose through, and in a preprocessor directive or
+  // under -E the token stream must be preserved rather than judged.
+  if (isLexingRawMode() || ParsingPreprocessorDirective ||
+      PP->isPreprocessedOutput())
+    return false;
+
+  // The flag test and the IdentifierProfile carve-out both live in the
+  // predicate, which the two identifier-continuation paths ask as well — so an
+  // excluded code point stops an identifier for exactly the reasons it is
+  // diagnosed here, and `a−b` cannot end up with a different story from
+  // `a − b`.
+  if (!isDiagnosableOperatorExclusion(CodePoint))
+    return false;
+
+  const UserOperatorExclusion *E = getUserOperatorExclusion(CodePoint);
+  assert(E && "isDiagnosableOperatorExclusion said yes without a table entry");
+
+  CharSourceRange Range = makeCharRange(*this, BufferPtr, CurPtr);
+  switch (E->Reason) {
+  case UserOperatorExclusionReason::None:
+  case UserOperatorExclusionReason::IdentifierProfile:
+    llvm_unreachable("filtered by isDiagnosableOperatorExclusion");
+
+  case UserOperatorExclusionReason::ConfusableWith:
+    // The security property (U§10, U§5): never aliased.  The ASCII token this
+    // code point apes comes from the generated table, so the message cannot
+    // drift from the derivation that excluded it.
+    assert(E->Confusable && "ConfusableWith entry without an ASCII token");
+    PP->Diag(Range.getBegin(), diag::err_unicode_operator_confusable)
+        << EscapeSingleCodepointForDiagnostic(CodePoint) << E->Confusable
+        << Range;
+    break;
+
+  case UserOperatorExclusionReason::EmojiPresentation:
+    PP->Diag(Range.getBegin(), diag::err_unicode_operator_emoji_presentation)
+        << EscapeSingleCodepointForDiagnostic(CodePoint) << Range;
+    break;
+  }
+
+  // Recovery: form a token rather than dropping the character.  Upstream drops
+  // a stray *glyph* and cannot drop an explicit UCN ([lex.charset] forbids
+  // discarding a possible preprocessing token written that way), which is
+  // exactly the asymmetry that left a UCN-spelled exclusion undiagnosed.
+  // Forming tok::unknown for both spellings is the weaker action that is legal
+  // for both, and it keeps the excluded character visible to the parser
+  // instead of quietly deleting it.
+  MIOpt.ReadToken();
+  FormTokenWithChars(Result, CurPtr, tok::unknown);
   return true;
 }
 
@@ -4717,6 +4807,12 @@ LexStart:
         if (isUserOperatorCodePoint(CodePoint))
           return LexUserOperator(Result, CurPtr);
 
+        // U05: a *named* exclusion gets its reason here rather than a generic
+        // stray-character error later.  This is also where the UCN spelling
+        // becomes diagnosable at all -- see LexExcludedOperator.
+        if (LexExcludedOperator(Result, CodePoint, CurPtr))
+          return true;
+
         return LexUnicodeIdentifierStart(Result, CodePoint, CurPtr);
       }
     }
@@ -4760,6 +4856,11 @@ LexStart:
       // inspection.
       if (isUserOperatorCodePoint(CodePoint))
         return LexUserOperator(Result, CurPtr);
+      // U05: the same exclusion diagnostic the UCN path above emits, from the
+      // same table, so the two spellings of an excluded code point are as
+      // equivalent as the two spellings of an included one (U11).
+      if (LexExcludedOperator(Result, CodePoint, CurPtr))
+        return true;
       return LexUnicodeIdentifierStart(Result, CodePoint, CurPtr);
     }
 
