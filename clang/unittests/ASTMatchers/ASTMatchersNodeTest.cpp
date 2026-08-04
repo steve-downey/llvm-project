@@ -3165,6 +3165,65 @@ void f() {
   EXPECT_FALSE(Counts->getCountsRefs()[1]);
 }
 
+// U17: the ASTMatchers surface of the new node. matchesConditionally() runs
+// both the static and the dynamic matcher and fails if they disagree, so
+// these also cover the Registry.cpp entry that clang-query and clang-tidy's
+// dynamic matchers use.
+namespace {
+const char *UnicodeOperatorCode = R"(
+struct S { int v; };
+int operator⊞(S, S);
+int f(S a, S b) { return a ⊞ b; }
+)";
+const std::vector<std::string> UnicodeOperatorArgs = {"-std=c++23",
+                                                      "-funicode-operators"};
+} // namespace
+
+TEST(ASTMatchersTestUnicodeOperators, UserOperatorExpr) {
+  EXPECT_TRUE(matchesConditionally(UnicodeOperatorCode, userOperatorExpr(),
+                                   true, UnicodeOperatorArgs));
+
+  // The node exists only under the flag; an ordinary call is not one.
+  EXPECT_TRUE(matchesConditionally("struct S {}; int g(S, S); "
+                                   "int f(S a, S b) { return g(a, b); }",
+                                   userOperatorExpr(), false,
+                                   UnicodeOperatorArgs));
+
+  // It is not a CXXOperatorCallExpr: that node is welded to
+  // OverloadedOperatorKind, which is why this one had to be a sibling.
+  EXPECT_TRUE(matchesConditionally(UnicodeOperatorCode, cxxOperatorCallExpr(),
+                                   false, UnicodeOperatorArgs));
+}
+
+TEST(ASTMatchersTestUnicodeOperators, UserOperatorExprTraversal) {
+  // As-is, the one child is the call the use desugars to.
+  EXPECT_TRUE(matchesConditionally(
+      UnicodeOperatorCode,
+      traverse(TK_AsIs, userOperatorExpr(has(callExpr()))), true,
+      UnicodeOperatorArgs));
+
+  // Ignoring unless spelled in source, the children are the operands as
+  // written; neither the call nor the synthesized callee naming the operator
+  // appears in the source at all.
+  EXPECT_TRUE(matchesConditionally(
+      UnicodeOperatorCode,
+      traverse(TK_IgnoreUnlessSpelledInSource,
+               userOperatorExpr(has(declRefExpr(
+                   to(parmVarDecl(hasName("a"))))))),
+      true, UnicodeOperatorArgs));
+  EXPECT_TRUE(matchesConditionally(
+      UnicodeOperatorCode,
+      traverse(TK_IgnoreUnlessSpelledInSource,
+               userOperatorExpr(has(declRefExpr(
+                   to(parmVarDecl(hasName("b"))))))),
+      true, UnicodeOperatorArgs));
+  EXPECT_TRUE(matchesConditionally(
+      UnicodeOperatorCode,
+      traverse(TK_IgnoreUnlessSpelledInSource,
+               userOperatorExpr(has(callExpr()))),
+      false, UnicodeOperatorArgs));
+}
+
 TEST(ASTMatchersTest, Finder_DynamicOnlyAcceptsSomeMatchers) {
   MatchFinder Finder;
   EXPECT_TRUE(Finder.addDynamicMatcher(decl(), nullptr));
