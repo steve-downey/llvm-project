@@ -380,6 +380,26 @@ public:
   findEndOfIdentifierContinuation(SourceLocation Loc, const SourceManager &SM,
                                   const LangOptions &LangOpts);
 
+  /// Decode the Unicode scalar value named by the spelling of a
+  /// tok::user_operator token (-funicode-operators).
+  ///
+  /// A user-operator token carries no payload: its identity *is* its code
+  /// point, and by U1 every user-operator token is exactly one code point, so
+  /// the spelling is a complete and unambiguous encoding of that identity.
+  /// Everything downstream (operator-function-id, DeclarationName, mangling)
+  /// asks for the scalar value here rather than reading a token field.
+  ///
+  /// \returns the code point, or 0 if \p Spelling is not exactly one decodable
+  /// code point.
+  static uint32_t getUserOperatorCodePoint(StringRef Spelling);
+
+  /// Decode the Unicode scalar value named by \p Tok, which must be a
+  /// tok::user_operator token.  Cleans the spelling first (escaped newlines,
+  /// trigraphs), so a UTF-8 sequence split by a line splice still decodes.
+  static uint32_t getUserOperatorCodePoint(const Token &Tok,
+                                           const SourceManager &SourceMgr,
+                                           const LangOptions &LangOpts);
+
   /// Relex the token at the specified location.
   /// \returns true if there was a failure, false on success.
   static bool getRawToken(SourceLocation Loc, Token &Result,
