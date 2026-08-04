@@ -2585,10 +2585,36 @@ bool Parser::ParseUnqualifiedIdOperator(CXXScopeSpec &SS, bool EnteringContext,
   //     ptr-operator conversion-declarator[opt]
 
   // Parse the type-specifier-seq.
+  //
+  // U05: `operator ∂` reaches here, because ∂ (U+2202), ∇ (U+2207) and ∞
+  // (U+221E) are excluded from U1 exactly so that they can stay *identifier*
+  // characters -- and in this compiler they already are one, by default, via
+  // the D137051 mathematical-notation extension.  So the reason they are not
+  // operators cannot be given at lex time without breaking every legitimate
+  // use of one as a name; it can only be given here, and only once the
+  // conversion-function-id reading has failed, since `using ∂ = int;
+  // operator ∂();` is a perfectly good conversion function.  (Written without
+  // a space, `operator∂` is a single identifier and never gets here at all.)
+  Token OperatorNameTok = Tok;
+  auto NoteIdentifierProfileExclusion = [&] {
+    if (!getLangOpts().UnicodeOperators || !OperatorNameTok.is(tok::identifier))
+      return;
+    const IdentifierInfo *II = OperatorNameTok.getIdentifierInfo();
+    if (!II)
+      return;
+    uint32_t CodePoint = Lexer::getUserOperatorCodePoint(II->getName());
+    if (Lexer::isUserOperatorIdentifierProfileExclusion(CodePoint))
+      Diag(OperatorNameTok.getLocation(),
+           diag::note_unicode_operator_identifier_profile)
+          << EscapeSingleCodepointForDiagnostic(CodePoint);
+  };
+
   DeclSpec DS(AttrFactory);
   if (ParseCXXTypeSpecifierSeq(
-          DS, DeclaratorContext::ConversionId)) // FIXME: ObjectType?
+          DS, DeclaratorContext::ConversionId)) { // FIXME: ObjectType?
+    NoteIdentifierProfileExclusion();
     return true;
+  }
 
   // Parse the conversion-declarator, which is merely a sequence of
   // ptr-operators.
@@ -2598,8 +2624,10 @@ bool Parser::ParseUnqualifiedIdOperator(CXXScopeSpec &SS, bool EnteringContext,
 
   // Finish up the type.
   TypeResult Ty = Actions.ActOnTypeName(D);
-  if (Ty.isInvalid())
+  if (Ty.isInvalid()) {
+    NoteIdentifierProfileExclusion();
     return true;
+  }
 
   // Note that this is a conversion-function-id.
   Result.setConversionFunctionId(KeywordLoc, Ty.get(),

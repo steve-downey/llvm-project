@@ -770,6 +770,16 @@ def err_literal_operator_string_not_empty : Error<
 def warn_cxx98_compat_literal_operator : Warning<
   "literal operators are incompatible with C++98">,
   InGroup<CXX98Compat>, DefaultIgnore;
+// -funicode-operators, U#5 predicate 5: partial-differential, nabla and
+// infinity are excluded from the operator set precisely because TR31 7.1's
+// mathematical notation profile cedes them to the *identifier* side, and Clang
+// already admits them there (D137051, on by default).  So they never reach the
+// lexer's operator classification, and the reason can only be given where an
+// operator was unambiguously meant -- operator-name position, and only once
+// the conversion-function-id reading has already failed.
+def note_unicode_operator_identifier_profile : Note<
+  "%0 is an identifier character (mathematical notation profile), not a "
+  "user-defined operator">;
 
 // Classes.
 def err_anon_type_definition : Error<

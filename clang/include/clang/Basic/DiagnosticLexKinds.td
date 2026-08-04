@@ -151,6 +151,18 @@ def ext_mathematical_notation : ExtWarn<
   "mathematical notation character %0 in an identifier is a Clang extension">,
   InGroup<DiagGroup<"mathematical-notation-identifier-extension">>;
 
+// -funicode-operators: a code point a reader could reasonably take for a user
+// operator, that U#5 predicate 5 names as an exclusion.  The exclusions exist
+// for the *reader's* protection (U#10), so the message gives the reason rather
+// than a generic stray-character error.  Both are errors, never recoveries: a
+// character that looks like an existing token must fail to lex, never quietly
+// alias one.
+def err_unicode_operator_confusable : Error<
+  "%0 is not a user-defined operator: it is confusable with '%1'">;
+def err_unicode_operator_emoji_presentation : Error<
+  "%0 is not a user-defined operator: characters with emoji presentation are "
+  "excluded from the operator set">;
+
 def ext_delimited_escape_sequence : Extension<
   "%select{delimited|named}0 escape sequences are a %select{C++23|C2y|Clang}1 "
   "extension">, InGroup<DiagGroup<"delimited-escape-sequence-extension">>;
