@@ -1606,6 +1606,16 @@ bool CallExpr::isUnevaluatedBuiltinCall(const ASTContext &Ctx) const {
   return false;
 }
 
+CallExpr *BacktickInfixExpr::getCallExpr() {
+  // IgnoreImplicit() strips exactly the nodes Sema may have put between the
+  // wrapper and the call it built -- CXXBindTemporaryExpr for a class-typed
+  // prvalue with a non-trivial destructor, ARC's consuming ImplicitCastExpr,
+  // MaterializeTemporaryExpr. It stops at the call itself. When a builtin
+  // with custom type checking rewrote the call there is no call left, and no
+  // callee either, so null is the honest answer.
+  return dyn_cast<CallExpr>(getSubExpr()->IgnoreImplicit());
+}
+
 QualType CallExpr::getCallReturnType(const ASTContext &Ctx) const {
   const Expr *Callee = getCallee();
   QualType CalleeType = Callee->getType();

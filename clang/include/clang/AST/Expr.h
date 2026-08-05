@@ -2235,11 +2235,19 @@ public:
   }
 };
 
-/// BacktickInfixExpr - Wraps the desugared CallExpr produced by
-/// `lhs `op` rhs` infix syntax (-fbacktick). Transparent to semantics,
-/// codegen, and type analysis; the pretty-printer emits the backtick form.
+/// BacktickInfixExpr - Wraps the semantic form of `lhs `op` rhs` infix syntax
+/// (-fbacktick). Transparent to semantics, codegen, and type analysis; the
+/// pretty-printer emits the backtick form.
 class BacktickInfixExpr : public Expr {
-  Stmt *Inner; // Always a CallExpr
+  /// The expression the backtick use desugars to. This is the call
+  /// `op(lhs, rhs)` in the ordinary case, but it is *not* always a CallExpr:
+  /// Sema may wrap the call (a class-typed prvalue result with a non-trivial
+  /// destructor comes back inside a CXXBindTemporaryExpr; under ARC a
+  /// retainable result gains a consuming ImplicitCastExpr), and a builtin
+  /// with custom type checking replaces the call outright with a node of its
+  /// own (`a `__builtin_shufflevector` b` yields a ShuffleVectorExpr). Use
+  /// getCallExpr() rather than casting this.
+  Stmt *Inner;
 
 public:
   BacktickInfixExpr(Expr *InnerCall)
@@ -2255,6 +2263,15 @@ public:
   Expr *getSubExpr() { return cast<Expr>(Inner); }
   const Expr *getSubExpr() const { return cast<Expr>(Inner); }
   void setSubExpr(Expr *E) { Inner = E; }
+
+  /// The desugared call, looked up through any implicit nodes Sema wrapped it
+  /// in. Returns null when the semantic form is not a call at all, which
+  /// happens when a builtin with custom type checking rewrote it; callers
+  /// must handle that.
+  CallExpr *getCallExpr();
+  const CallExpr *getCallExpr() const {
+    return const_cast<BacktickInfixExpr *>(this)->getCallExpr();
+  }
 
   SourceLocation getBeginLoc() const LLVM_READONLY {
     return Inner ? Inner->getBeginLoc() : SourceLocation();
