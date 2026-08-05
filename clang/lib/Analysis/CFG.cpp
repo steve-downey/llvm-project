@@ -1649,6 +1649,15 @@ void CFGBuilder::findConstructionContexts(
     findConstructionContexts(Layer, PE->getSubExpr());
     break;
   }
+  case Stmt::BacktickInfixExprClass: {
+    // Likewise transparent: the construction context of a backtick infix use
+    // belongs to the call it desugars to. Without this the chain breaks at
+    // the wrapper and a lifetime-extended temporary is modelled as an
+    // ordinary one.
+    auto *BIE = cast<BacktickInfixExpr>(Child);
+    findConstructionContexts(Layer, BIE->getSubExpr());
+    break;
+  }
   default:
     break;
   }
@@ -2369,6 +2378,15 @@ CFGBlock *CFGBuilder::Visit(Stmt * S, AddStmtChoice asc,
     case Stmt::BinaryOperatorClass:
     case Stmt::CompoundAssignOperatorClass:
       return VisitBinaryOperator(cast<BinaryOperator>(S), asc);
+
+    case Stmt::BacktickInfixExprClass:
+      // A backtick infix use is exactly the call it desugars to (-fbacktick),
+      // so the wrapper is not an element of its own: the CFG built for
+      // `x `f` y` is the CFG built for `f(x, y)`. Anything holding a pointer
+      // to the wrapper still resolves to the call's value through
+      // Environment's ignoreTransparentExprs.
+      return Visit(cast<BacktickInfixExpr>(S)->getSubExpr(), asc,
+                   ExternallyDestructed);
 
     case Stmt::BlockExprClass:
       return VisitBlockExpr(cast<BlockExpr>(S), asc);
@@ -5185,6 +5203,14 @@ tryAgain:
 
     case Stmt::ParenExprClass:
       E = cast<ParenExpr>(E)->getSubExpr();
+      goto tryAgain;
+
+    case Stmt::BacktickInfixExprClass:
+      // Transparent, so ExternallyDestructed must be carried through rather
+      // than dropped by the default arm -- otherwise a lifetime-extended
+      // backtick result gets a temporary destructor here *and* an implicit
+      // one at end of scope.
+      E = cast<BacktickInfixExpr>(E)->getSubExpr();
       goto tryAgain;
 
     case Stmt::MaterializeTemporaryExprClass: {
