@@ -208,6 +208,16 @@ static const Expr *LookThroughExpr(const Expr *E) {
       E = OVE->getSourceExpr();
       continue;
     }
+    // A backtick infix use (-fbacktick) is transparent, and the CFG looks
+    // through it, so liveness must key on the same expression the analyzer
+    // binds a value to -- the call. Without this the producer marks the
+    // wrapper live while the consumer asks about the call, the binding is
+    // reaped as dead the moment it is made, and every backtick result reads
+    // back as unknown.
+    if (const auto *BIE = dyn_cast<BacktickInfixExpr>(E)) {
+      E = BIE->getSubExpr();
+      continue;
+    }
     break;
   }
   return E;

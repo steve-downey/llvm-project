@@ -1870,6 +1870,13 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
 
     case Expr::ConstantExprClass:
     case Stmt::ExprWithCleanupsClass:
+    // A BacktickInfixExpr is a fully transparent wrapper around the call its
+    // infix use desugars to (-fbacktick). The CFG looks through it, so the
+    // inner call is the modelled element and this node has no separate value;
+    // Environment's ignoreTransparentExprs resolves a read of it to the
+    // call's binding. Same treatment, and for the same reason, as the two
+    // wrappers above.
+    case Stmt::BacktickInfixExprClass:
       Dst.insert(Pred);
       // Handled due to fully linearised CFG.
       break;
