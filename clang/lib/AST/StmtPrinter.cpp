@@ -1631,21 +1631,42 @@ void StmtPrinter::VisitParenExpr(ParenExpr *Node) {
 
 void StmtPrinter::VisitBacktickInfixExpr(BacktickInfixExpr *Node) {
   // The backtick form is reconstructed from the structure of the desugared
-  // call: operand, callee, operand. The call is not always recoverable -- a
-  // builtin with custom type checking rewrites it to a node that keeps
-  // neither the callee nor the call shape -- and then there is nothing left
-  // to spell as the operator, so print the semantic form instead. That is
-  // still valid source with the same meaning, just not the surface syntax.
-  CallExpr *CE = Node->getCallExpr();
-  if (!CE || CE->getNumArgs() < 2) {
-    PrintExpr(Node->getSubExpr());
+  // call: operand, callee, operand. A type slot (D16) desugars to
+  // construction instead of a call, so recover the type and the two
+  // written arguments from the construction node. Neither is always
+  // recoverable -- a builtin with custom type checking rewrites the call
+  // to a node that keeps neither the callee nor the call shape -- and then
+  // there is nothing left to spell as the operator, so print the semantic
+  // form instead. That is still valid source with the same meaning, just
+  // not the surface syntax.
+  if (CallExpr *CE = Node->getCallExpr(); CE && CE->getNumArgs() >= 2) {
+    PrintExpr(CE->getArg(0));
+    OS << " `";
+    PrintExpr(CE->getCallee());
+    OS << "` ";
+    PrintExpr(CE->getArg(1));
     return;
   }
-  PrintExpr(CE->getArg(0));
-  OS << " `";
-  PrintExpr(CE->getCallee());
-  OS << "` ";
-  PrintExpr(CE->getArg(1));
+  Expr *Inner = Node->getSubExpr()->IgnoreImplicit();
+  if (auto *TOE = dyn_cast<CXXTemporaryObjectExpr>(Inner);
+      TOE && TOE->getNumArgs() >= 2) {
+    PrintExpr(TOE->getArg(0));
+    OS << " `";
+    TOE->getType().print(OS, Policy);
+    OS << "` ";
+    PrintExpr(TOE->getArg(1));
+    return;
+  }
+  if (auto *UCE = dyn_cast<CXXUnresolvedConstructExpr>(Inner);
+      UCE && UCE->getNumArgs() >= 2) {
+    PrintExpr(UCE->getArg(0));
+    OS << " `";
+    OS << UCE->getTypeAsWritten().getAsString(Policy);
+    OS << "` ";
+    PrintExpr(UCE->getArg(1));
+    return;
+  }
+  PrintExpr(Node->getSubExpr());
 }
 
 void StmtPrinter::VisitUnaryOperator(UnaryOperator *Node) {

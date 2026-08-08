@@ -7547,6 +7547,12 @@ public:
                                    SourceLocation CloseLoc, Expr *LHS,
                                    Expr *RHS);
 
+  /// D16: the slot is a type-name; x `T` y is functional-style
+  /// construction, T(x, y), with CTAD applying.
+  ExprResult ActOnBacktickOperator(SourceLocation OpenLoc, ParsedType TypeRep,
+                                   SourceLocation CloseLoc, Expr *LHS,
+                                   Expr *RHS);
+
   /// ActOnCallExpr - Handle a call to Fn with the specified array of arguments.
   /// This provides the location of the left/right parens and a list of comma
   /// locations.
