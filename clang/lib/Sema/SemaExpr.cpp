@@ -6770,6 +6770,21 @@ ExprResult Sema::ActOnBacktickOperator(Scope *S, SourceLocation OpenLoc,
   return new (Context) BacktickInfixExpr(Call.get());
 }
 
+ExprResult Sema::ActOnBacktickOperator(SourceLocation OpenLoc,
+                                       ParsedType TypeRep,
+                                       SourceLocation CloseLoc, Expr *LHS,
+                                       Expr *RHS) {
+  // D16: x `T` y is T(x, y). Route through the entry the spelled functional
+  // cast uses so CTAD, temporaries, and dependent construction behave
+  // identically.
+  Expr *Args[] = {LHS, RHS};
+  ExprResult Construct = ActOnCXXTypeConstructExpr(
+      TypeRep, OpenLoc, Args, CloseLoc, /*ListInitialization=*/false);
+  if (Construct.isInvalid())
+    return Construct;
+  return new (Context) BacktickInfixExpr(Construct.get());
+}
+
 ExprResult Sema::ActOnCallExpr(Scope *Scope, Expr *Fn, SourceLocation LParenLoc,
                                MultiExprArg ArgExprs, SourceLocation RParenLoc,
                                Expr *ExecConfig) {
