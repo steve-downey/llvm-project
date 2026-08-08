@@ -3844,6 +3844,14 @@ private:
   /// just a regular sub-expression.
   SourceLocation ExprStatementTokLoc;
 
+  /// Backtick infix operator slot, D16: when the entire slot is a
+  /// type-name, `` x `T` y `` is functional-style construction, T(x, y).
+  /// Returns a usable result carrying the type when the slot is a type
+  /// followed by the closing backtick, an unset result when the slot is
+  /// an ordinary expression, and an invalid result when annotation failed
+  /// (diagnostic already emitted).
+  TypeResult TryParseBacktickTypeSlot();
+
   /// Checks if the \p Level is valid for use in a fold expression.
   bool isFoldOperator(prec::Level Level) const;
 
