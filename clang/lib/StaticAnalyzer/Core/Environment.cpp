@@ -53,6 +53,9 @@ static const Expr *ignoreTransparentExprs(const Expr *E) {
   case Stmt::CXXBindTemporaryExprClass:
     E = cast<CXXBindTemporaryExpr>(E)->getSubExpr();
     break;
+  case Stmt::BacktickInfixExprClass:
+    E = cast<BacktickInfixExpr>(E)->getSubExpr();
+    break;
   case Stmt::SubstNonTypeTemplateParmExprClass:
     E = cast<SubstNonTypeTemplateParmExpr>(E)->getReplacement();
     break;

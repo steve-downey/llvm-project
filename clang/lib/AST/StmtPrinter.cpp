@@ -1630,7 +1630,17 @@ void StmtPrinter::VisitParenExpr(ParenExpr *Node) {
 }
 
 void StmtPrinter::VisitBacktickInfixExpr(BacktickInfixExpr *Node) {
-  auto *CE = cast<CallExpr>(Node->getSubExpr());
+  // The backtick form is reconstructed from the structure of the desugared
+  // call: operand, callee, operand. The call is not always recoverable -- a
+  // builtin with custom type checking rewrites it to a node that keeps
+  // neither the callee nor the call shape -- and then there is nothing left
+  // to spell as the operator, so print the semantic form instead. That is
+  // still valid source with the same meaning, just not the surface syntax.
+  CallExpr *CE = Node->getCallExpr();
+  if (!CE || CE->getNumArgs() < 2) {
+    PrintExpr(Node->getSubExpr());
+    return;
+  }
   PrintExpr(CE->getArg(0));
   OS << " `";
   PrintExpr(CE->getCallee());
