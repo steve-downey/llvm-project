@@ -1870,6 +1870,14 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
 
     case Expr::ConstantExprClass:
     case Stmt::ExprWithCleanupsClass:
+    // A UserOperatorExpr is a fully transparent wrapper around the call its
+    // operator use desugars to (-funicode-operators): it copies type, value
+    // kind and object kind from that semantic form, and the CFG looks through
+    // it, so the inner call is the modelled element and this node has no
+    // separate value. Environment's ignoreTransparentExprs resolves a read of
+    // it to the call's binding. Same treatment, and for the same reason, as
+    // the two wrappers above.
+    case Stmt::UserOperatorExprClass:
       Dst.insert(Pred);
       // Handled due to fully linearised CFG.
       break;
@@ -1910,11 +1918,6 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::AsTypeExprClass:
     case Stmt::ConceptSpecializationExprClass:
     case Stmt::CXXRewrittenBinaryOperatorClass:
-    // A UserOperatorExpr is a transparent wrapper around the call its operator
-    // use desugars to, and gets the same treatment as the one upstream
-    // wrapper of the same shape, CXXRewrittenBinaryOperator: the inner call is
-    // its own CFG element and is modelled; the wrapper itself is not.
-    case Stmt::UserOperatorExprClass:
     case Stmt::RequiresExprClass:
     case Stmt::EmbedExprClass:
       // Fall through.

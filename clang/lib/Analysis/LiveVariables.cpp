@@ -176,6 +176,16 @@ static const Expr *LookThroughExpr(const Expr *E) {
       E = OVE->getSourceExpr();
       continue;
     }
+    // A user-operator use (-funicode-operators) is transparent, and the CFG
+    // looks through it to the semantic form, so liveness must key on that
+    // form too -- the same expression the analyzer binds a value to. Without
+    // this the producer marks the wrapper live while the consumer asks about
+    // the call, the binding is reaped as dead the moment it is made, and
+    // every user-operator result reads back as unknown.
+    if (const auto *UOE = dyn_cast<UserOperatorExpr>(E)) {
+      E = UOE->getSemanticForm();
+      continue;
+    }
     break;
   }
   return E;

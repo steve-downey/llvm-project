@@ -1649,6 +1649,16 @@ void CFGBuilder::findConstructionContexts(
     findConstructionContexts(Layer, PE->getSubExpr());
     break;
   }
+  case Stmt::UserOperatorExprClass: {
+    // Likewise transparent: a user-operator use (-funicode-operators) means
+    // its semantic form, from which it copies type, value kind and object
+    // kind, so the construction context belongs to that form. Without this
+    // the chain breaks at the wrapper and a lifetime-extended temporary is
+    // modelled as an ordinary one.
+    auto *UOE = cast<UserOperatorExpr>(Child);
+    findConstructionContexts(Layer, UOE->getSemanticForm());
+    break;
+  }
   default:
     break;
   }
@@ -2369,6 +2379,15 @@ CFGBlock *CFGBuilder::Visit(Stmt * S, AddStmtChoice asc,
     case Stmt::BinaryOperatorClass:
     case Stmt::CompoundAssignOperatorClass:
       return VisitBinaryOperator(cast<BinaryOperator>(S), asc);
+
+    case Stmt::UserOperatorExprClass:
+      // A user-operator use is exactly the call it desugars to
+      // (-funicode-operators), so the wrapper is not an element of its own:
+      // the CFG built for `x ⊞ y` is the CFG built for `operator⊞(x, y)`.
+      // Anything holding a pointer to the wrapper still resolves to the
+      // call's value through Environment's ignoreTransparentExprs.
+      return Visit(cast<UserOperatorExpr>(S)->getSemanticForm(), asc,
+                   ExternallyDestructed);
 
     case Stmt::BlockExprClass:
       return VisitBlockExpr(cast<BlockExpr>(S), asc);
@@ -5185,6 +5204,14 @@ tryAgain:
 
     case Stmt::ParenExprClass:
       E = cast<ParenExpr>(E)->getSubExpr();
+      goto tryAgain;
+
+    case Stmt::UserOperatorExprClass:
+      // Transparent, so ExternallyDestructed must be carried through rather
+      // than dropped by the default arm -- otherwise a lifetime-extended
+      // user-operator result gets a temporary-object destructor here *and*
+      // the implicit end-of-scope one.
+      E = cast<UserOperatorExpr>(E)->getSemanticForm();
       goto tryAgain;
 
     case Stmt::MaterializeTemporaryExprClass: {

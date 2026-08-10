@@ -53,6 +53,9 @@ static const Expr *ignoreTransparentExprs(const Expr *E) {
   case Stmt::CXXBindTemporaryExprClass:
     E = cast<CXXBindTemporaryExpr>(E)->getSubExpr();
     break;
+  case Stmt::UserOperatorExprClass:
+    E = cast<UserOperatorExpr>(E)->getSemanticForm();
+    break;
   case Stmt::SubstNonTypeTemplateParmExprClass:
     E = cast<SubstNonTypeTemplateParmExpr>(E)->getReplacement();
     break;
