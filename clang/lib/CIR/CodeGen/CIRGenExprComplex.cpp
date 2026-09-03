@@ -276,6 +276,14 @@ public:
     return Visit(e->getSemanticForm());
   }
 
+  mlir::Value VisitBacktickInfixExpr(BacktickInfixExpr *e) {
+    return Visit(e->getSubExpr());
+  }
+
+  mlir::Value VisitUserOperatorExpr(UserOperatorExpr *e) {
+    return Visit(e->getSemanticForm());
+  }
+
   // Compound assignments.
   mlir::Value VisitBinAddAssign(const CompoundAssignOperator *e) {
     return emitCompoundAssign(e, &ComplexExprEmitter::emitBinAdd);

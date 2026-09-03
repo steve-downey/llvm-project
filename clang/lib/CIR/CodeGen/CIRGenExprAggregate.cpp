@@ -440,6 +440,10 @@ public:
   void VisitCXXRewrittenBinaryOperator(CXXRewrittenBinaryOperator *e) {
     Visit(e->getSemanticForm());
   }
+  void VisitBacktickInfixExpr(BacktickInfixExpr *e) { Visit(e->getSubExpr()); }
+  void VisitUserOperatorExpr(UserOperatorExpr *e) {
+    Visit(e->getSemanticForm());
+  }
   void VisitObjCMessageExpr(ObjCMessageExpr *e) {
     cgf.cgm.errorNYI(e->getSourceRange(),
                      "AggExprEmitter: VisitObjCMessageExpr");
