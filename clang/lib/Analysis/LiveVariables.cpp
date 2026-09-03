@@ -186,6 +186,15 @@ static const Expr *LookThroughExpr(const Expr *E) {
       E = BIE->getSubExpr();
       continue;
     }
+    // Same for a user-operator use (-funicode-operators): the CFG looks
+    // through it to the semantic form, so liveness must key on that form too.
+    // Without this the value is reaped as dead the moment it is bound and
+    // every user-operator result reads back as unknown -- the defect that
+    // looks like conservative modelling rather than a bug.
+    if (const auto *UOE = dyn_cast<UserOperatorExpr>(E)) {
+      E = UOE->getSemanticForm();
+      continue;
+    }
     break;
   }
   return E;
