@@ -594,6 +594,15 @@ public:
     return Visit(e->getSemanticForm());
   }
 
+  // A UserOperatorExpr is the same shape as the rewritten binary operator
+  // above: it holds the call its operator use desugars to and takes its type,
+  // value kind and object kind from it, so code generation is that call's.
+  // The node is gated behind -funicode-operators; a default build never sees
+  // one.
+  mlir::Value VisitUserOperatorExpr(UserOperatorExpr *e) {
+    return Visit(e->getSemanticForm());
+  }
+
   mlir::Value VisitUnaryExprOrTypeTraitExpr(const UnaryExprOrTypeTraitExpr *e);
   mlir::Value
   VisitAbstractConditionalOperator(const AbstractConditionalOperator *e);
