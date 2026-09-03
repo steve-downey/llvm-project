@@ -1188,6 +1188,14 @@ LValue CIRGenFunction::emitLValue(const Expr *e) {
     getCIRGenModule().errorNYI(e->getSourceRange(),
                                "emitLValue: CXXRewrittenBinaryOperator");
     return LValue();
+  // Unlike the CXXRewrittenBinaryOperator arm beside it, this one has an l-value
+  // answer to give: an operator returning a reference is a call returning a
+  // reference, and the call classes above already handle it. Falling to the
+  // default arm here is not merely a missing feature -- it returns a
+  // default-constructed LValue whose null type asserts in QualType, so the
+  // shape crashes rather than diagnosing.
+  case Expr::BacktickInfixExprClass:
+    return emitLValue(cast<BacktickInfixExpr>(e)->getSubExpr());
   case Expr::VAArgExprClass:
     getCIRGenModule().errorNYI(e->getSourceRange(), "emitLValue: VAArgExpr");
     return LValue();
