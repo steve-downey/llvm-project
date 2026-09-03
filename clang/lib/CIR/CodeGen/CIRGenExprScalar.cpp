@@ -586,6 +586,19 @@ public:
     return Visit(e->getSemanticForm());
   }
 
+  // The two operator-sugar wrappers are the same shape as the rewritten
+  // binary operator above: each holds the call its use desugars to and takes
+  // its type, value kind and object kind from it, so code generation is that
+  // call's. Both are gated -- -fbacktick and -funicode-operators -- and a
+  // default build never sees one.
+  mlir::Value VisitBacktickInfixExpr(BacktickInfixExpr *e) {
+    return Visit(e->getSubExpr());
+  }
+
+  mlir::Value VisitUserOperatorExpr(UserOperatorExpr *e) {
+    return Visit(e->getSemanticForm());
+  }
+
   mlir::Value VisitUnaryExprOrTypeTraitExpr(const UnaryExprOrTypeTraitExpr *e);
   mlir::Value
   VisitAbstractConditionalOperator(const AbstractConditionalOperator *e);
