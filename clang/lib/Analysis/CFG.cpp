@@ -1658,6 +1658,17 @@ void CFGBuilder::findConstructionContexts(
     findConstructionContexts(Layer, BIE->getSubExpr());
     break;
   }
+  case Stmt::UserOperatorExprClass: {
+    // Same reasoning as the backtick wrapper above: a user-operator use
+    // (-funicode-operators) means its semantic form, from which it copies
+    // type, value kind and object kind, so the construction context belongs
+    // to that form. The node is *not* transparent to TreeTransform -- it
+    // re-runs overload resolution on the operands as written -- but that is
+    // irrelevant here: the CFG is built from an already-instantiated AST.
+    auto *UOE = cast<UserOperatorExpr>(Child);
+    findConstructionContexts(Layer, UOE->getSemanticForm());
+    break;
+  }
   default:
     break;
   }
@@ -2386,6 +2397,15 @@ CFGBlock *CFGBuilder::Visit(Stmt * S, AddStmtChoice asc,
       // to the wrapper still resolves to the call's value through
       // Environment's ignoreTransparentExprs.
       return Visit(cast<BacktickInfixExpr>(S)->getSubExpr(), asc,
+                   ExternallyDestructed);
+
+    case Stmt::UserOperatorExprClass:
+      // A user-operator use is exactly the call it desugars to
+      // (-funicode-operators), so the wrapper is not an element of its own:
+      // the CFG built for `x ⊞ y` is the CFG built for `operator⊞(x, y)`.
+      // Anything holding a pointer to the wrapper still resolves to the
+      // call's value through Environment's ignoreTransparentExprs.
+      return Visit(cast<UserOperatorExpr>(S)->getSemanticForm(), asc,
                    ExternallyDestructed);
 
     case Stmt::BlockExprClass:
@@ -5211,6 +5231,14 @@ tryAgain:
       // backtick result gets a temporary destructor here *and* an implicit
       // one at end of scope.
       E = cast<BacktickInfixExpr>(E)->getSubExpr();
+      goto tryAgain;
+
+    case Stmt::UserOperatorExprClass:
+      // Likewise: carry ExternallyDestructed through instead of letting the
+      // default arm drop it to false, which would give a lifetime-extended
+      // user-operator result a temporary-object destructor here *and* the
+      // implicit end-of-scope one.
+      E = cast<UserOperatorExpr>(E)->getSemanticForm();
       goto tryAgain;
 
     case Stmt::MaterializeTemporaryExprClass: {

@@ -1877,6 +1877,13 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     // call's binding. Same treatment, and for the same reason, as the two
     // wrappers above.
     case Stmt::BacktickInfixExprClass:
+    // And a UserOperatorExpr is the same shape (-funicode-operators): it means
+    // its semantic form, from which it copies type, value kind and object
+    // kind, and the CFG now looks through it as well. It was previously
+    // grouped with CXXRewrittenBinaryOperator, which runs pre/post-stmt
+    // checkers and binds nothing; that was self-consistent only while CFG.cpp
+    // had no case and the wrapper really was an element of its own.
+    case Stmt::UserOperatorExprClass:
       Dst.insert(Pred);
       // Handled due to fully linearised CFG.
       break;
@@ -1917,11 +1924,6 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::AsTypeExprClass:
     case Stmt::ConceptSpecializationExprClass:
     case Stmt::CXXRewrittenBinaryOperatorClass:
-    // A UserOperatorExpr is a transparent wrapper around the call its operator
-    // use desugars to, and gets the same treatment as the one upstream
-    // wrapper of the same shape, CXXRewrittenBinaryOperator: the inner call is
-    // its own CFG element and is modelled; the wrapper itself is not.
-    case Stmt::UserOperatorExprClass:
     case Stmt::RequiresExprClass:
     case Stmt::EmbedExprClass:
       // Fall through.
