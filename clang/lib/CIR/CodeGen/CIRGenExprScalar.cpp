@@ -586,6 +586,14 @@ public:
     return Visit(e->getSemanticForm());
   }
 
+  // A BacktickInfixExpr is the same shape as the rewritten binary operator
+  // above: it holds the call `x `f` y` desugars to, so code generation is that
+  // call's. The node is gated behind -fbacktick; a default build never sees
+  // one.
+  mlir::Value VisitBacktickInfixExpr(BacktickInfixExpr *e) {
+    return Visit(e->getSubExpr());
+  }
+
   mlir::Value VisitUnaryExprOrTypeTraitExpr(const UnaryExprOrTypeTraitExpr *e);
   mlir::Value
   VisitAbstractConditionalOperator(const AbstractConditionalOperator *e);
