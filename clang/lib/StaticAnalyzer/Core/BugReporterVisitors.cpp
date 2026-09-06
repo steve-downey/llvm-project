@@ -2085,6 +2085,19 @@ static const Expr *peelOffOuterExpr(const Expr *Ex, const ExplodedNode *N) {
     return peelOffOuterExpr(FE->getSubExpr(), N);
   if (const auto *OVE = dyn_cast<OpaqueValueExpr>(Ex))
     return peelOffOuterExpr(OVE->getSourceExpr(), N);
+
+  // A BacktickInfixExpr (-fbacktick) holds the call its use desugars to and
+  // takes its value from it, so tracking a value through the wrapper is
+  // tracking it through that call. It must be peeled here, not merely looked
+  // through further down: the CFG has no element for the wrapper, so
+  // findNodeForExpression() below finds no node for one and Tracker::track
+  // abandons the whole chain -- the null-return suppression and every note the
+  // tracker would have produced along with it. Peeling makes the operator form
+  // and the call it is sugar for the *same* expression from here on, so every
+  // later answer agrees by construction. A default build never sees the node
+  // and this is the identity.
+  if (const auto *BIE = dyn_cast<BacktickInfixExpr>(Ex))
+    return peelOffOuterExpr(BIE->getSubExpr(), N);
   if (const auto *POE = dyn_cast<PseudoObjectExpr>(Ex)) {
     const auto *PropRef = dyn_cast<ObjCPropertyRefExpr>(POE->getSyntacticForm());
     if (PropRef && PropRef->isMessagingGetter()) {
