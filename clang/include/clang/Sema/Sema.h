@@ -7557,6 +7557,12 @@ public:
                                    SourceLocation CloseLoc, Expr *LHS,
                                    Expr *RHS);
 
+  /// D16: the slot is a type-name; x `T` y is functional-style
+  /// construction, T(x, y), with CTAD applying.
+  ExprResult ActOnBacktickOperator(SourceLocation OpenLoc, ParsedType TypeRep,
+                                   SourceLocation CloseLoc, Expr *LHS,
+                                   Expr *RHS);
+
   /// Build a use of a Unicode user-defined operator: the infix form
   /// `LHS <op> RHS` (two operands) or the prefix form `<op> RHS` (one
   /// operand).  The operator is identified only by its Unicode scalar value

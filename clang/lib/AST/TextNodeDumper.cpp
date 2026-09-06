@@ -1739,7 +1739,17 @@ void TextNodeDumper::VisitUnaryExprOrTypeTraitExpr(
 }
 
 void TextNodeDumper::VisitMemberExpr(const MemberExpr *Node) {
-  OS << " " << (Node->isArrow() ? "->" : ".") << *Node->getMemberDecl();
+  OS << " " << (Node->isArrow() ? "->" : ".");
+  if (PrintPolicy.BacktickKeywordEscape)
+    // -ast-dump reports the identifier the keyword escape yields, not the
+    // spelling needed to write it: that the name really is an ordinary
+    // identifier is the point of the escape. The NamedDecl stream operator
+    // would take the compilation's policy and re-escape it, disagreeing with
+    // every other name in the same dump -- VisitNamedDecl prints through the
+    // DeclarationName stream operator, which carries no policy.
+    OS << Node->getMemberDecl()->getDeclName();
+  else
+    OS << *Node->getMemberDecl();
   dumpPointer(Node->getMemberDecl());
   dumpNestedNameSpecifier(Node->getQualifier());
   switch (Node->isNonOdrUse()) {

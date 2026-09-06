@@ -40,8 +40,35 @@ struct Maker {
 // PRINT: {{.*}}5 `m.make` 6{{.*}}
 void member(const Maker &m) { (void)(5 `m.make` 6); }
 
+// D16: a type-name in the slot desugars to construction, not a call, so the
+// printer recovers the type from the CXXTemporaryObjectExpr (or, in a
+// dependent context, the CXXUnresolvedConstructExpr). Printing the semantic
+// form P(1, 2) here would be a round-trip hole, not a pass.
+struct Pair2 {
+  Pair2(int, int);
+};
+// PRINT: {{.*}}1 `Pair2` 2{{.*}}
+Pair2 t1 = 1 `Pair2` 2;
+
+namespace nn { struct Q { Q(int, int); }; }
+// PRINT: {{.*}}3 `nn::Q` 4{{.*}}
+nn::Q t2 = 3 `nn::Q` 4;
+
+// CTAD: the slot is printed as the deduced specialization, which re-parses
+// as a template-id type slot with the same meaning.
+template <class A, class B> struct pp { pp(A, B); };
+// PRINT: {{.*}}5 `pp<int, int>` 6{{.*}}
+auto t3 = 5 `pp` 6;
+
+// Dependent construction prints the written type.
+// PRINT: {{.*}}a `T` b{{.*}}
+template <class T> T t4(int a, int b) { return a `T` b; }
+
 // Not applicable here: the keyword-escape form. `kw` occupies operand and
 // declarator position, never the operator slot -- an escaped name between the
 // backticks is diagnosed ("expected expression between backticks"), so it can
-// never produce a BacktickInfixExpr. The escape's own -ast-print behaviour is
-// covered by clang/test/Parser/backtick-escape.cpp.
+// never produce a BacktickInfixExpr. The escape's own -ast-print round-trip
+// is a separate question, and is pinned by the -ast-print RUN lines in
+// clang/test/Parser/backtick-escape.cpp -- which that file did not have until
+// keyword-escape-round-trip was fixed, which is why the hole survived nine
+// steps behind this sentence.

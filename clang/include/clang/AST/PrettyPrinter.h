@@ -94,7 +94,8 @@ struct PrintingPolicy {
         UsePreferredNames(true), AlwaysIncludeTypeForTemplateArgument(false),
         CleanUglifiedParameters(false), EntireContentsOfLargeArray(true),
         PrettyEnums(true), UseEnumerators(true), UseHLSLTypes(LO.HLSL),
-        SuppressDeclAttributes(false), SuppressLambdaBody(false) {}
+        SuppressDeclAttributes(false), SuppressLambdaBody(false),
+        BacktickKeywordEscape(LO.Backtick) {}
 
   /// Adjust this printing policy for cases where it's known that we're
   /// printing C++ code (for instance, if AST dumping reaches a C++-only
@@ -379,6 +380,18 @@ struct PrintingPolicy {
   /// Whether to suppress printing the body of a lambda.
   LLVM_PREFERRED_TYPE(bool)
   unsigned SuppressLambdaBody : 1;
+
+  /// When true, an identifier whose spelling is a keyword is printed inside
+  /// the backtick keyword-escape that is the only way to write it. Set from
+  /// LangOptions::Backtick, so it is off in every compilation that does not
+  /// enable the escape, exactly as Bool, Restrict and Half are.
+  ///
+  /// This is deliberately not confined to source-reproducing printers: under
+  /// -fbacktick a diagnostic that names the entity `new` as "new" is naming it
+  /// with a spelling no program can contain. See
+  /// docs/backtick-operator-design.md, keyword-escape-printing.
+  LLVM_PREFERRED_TYPE(bool)
+  unsigned BacktickKeywordEscape : 1;
 
   /// Callbacks to use to allow the behavior of printing to be customized.
   const PrintingCallbacks *Callbacks = nullptr;
