@@ -1891,7 +1891,13 @@ void StmtPrinter::VisitMemberExpr(MemberExpr *Node) {
   Node->getQualifier().print(OS, Policy);
   if (Node->hasTemplateKeyword())
     OS << "template ";
-  OS << Node->getMemberNameInfo();
+  if (Policy.BacktickKeywordEscape)
+    // The stream operator prints the member name with a default-constructed
+    // policy, which drops the keyword escape and leaves `s.delete` -- not
+    // re-parseable source. Pass the policy we were given instead.
+    Node->getMemberNameInfo().printName(OS, Policy);
+  else
+    OS << Node->getMemberNameInfo();
   const TemplateParameterList *TPL = nullptr;
   if (auto *FD = dyn_cast<FunctionDecl>(Node->getMemberDecl())) {
     if (!Node->hadMultipleCandidates())

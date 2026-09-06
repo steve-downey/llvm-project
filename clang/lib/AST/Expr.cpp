@@ -1616,6 +1616,28 @@ CallExpr *BacktickInfixExpr::getCallExpr() {
   return dyn_cast<CallExpr>(getSubExpr()->IgnoreImplicit());
 }
 
+Expr *BacktickInfixExpr::getOperand(unsigned I) {
+  assert(I < 2 && "backtick infix operand index out of range");
+
+  // Recover the operands as written from the semantic form. The three shapes
+  // are the ones StmtPrinter::VisitBacktickInfixExpr reconstructs the surface
+  // syntax from: a call -- including the member form, whose object argument is
+  // the operator slot and not an operand -- a construction from a type slot,
+  // and that construction's dependent form. Index, rather than count back from
+  // the end: a selected overload may have default arguments beyond the two
+  // operands.
+  if (CallExpr *CE = getCallExpr())
+    return I < CE->getNumArgs() ? CE->getArg(I) : nullptr;
+
+  Expr *E = getSubExpr()->IgnoreImplicit();
+  if (auto *TOE = dyn_cast<CXXTemporaryObjectExpr>(E))
+    return I < TOE->getNumArgs() ? TOE->getArg(I) : nullptr;
+  if (auto *UCE = dyn_cast<CXXUnresolvedConstructExpr>(E))
+    return I < UCE->getNumArgs() ? UCE->getArg(I) : nullptr;
+
+  return nullptr;
+}
+
 QualType CallExpr::getCallReturnType(const ASTContext &Ctx) const {
   const Expr *Callee = getCallee();
   QualType CalleeType = Callee->getType();

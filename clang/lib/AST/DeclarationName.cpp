@@ -141,6 +141,12 @@ void DeclarationName::print(raw_ostream &OS,
             Name.split(getOpenMPVariantManglingSeparatorStr());
         OS << NameContextPair.first << "["
            << OMPTraitInfo(NameContextPair.second) << "]";
+      } else if (Policy.BacktickKeywordEscape &&
+                 II->getTokenID() != tok::identifier) {
+        // The spelling is a keyword in this compilation, so the name can only
+        // have been written -- and can only be written again -- inside a
+        // backtick escape. Printing it bare does not re-parse.
+        OS << '`' << Name << '`';
       } else {
         OS << Name;
       }

@@ -2273,12 +2273,38 @@ public:
     return const_cast<BacktickInfixExpr *>(this)->getCallExpr();
   }
 
+  /// The \p I'th operand as written (\p I is 0 or 1), recovered from the
+  /// semantic form rather than stored a second time. Returns null only when
+  /// the semantic form has an unexpected shape -- a builtin with custom type
+  /// checking rewrites the call to a node that keeps neither the callee nor
+  /// the call shape.
+  Expr *getOperand(unsigned I) LLVM_READONLY;
+  const Expr *getOperand(unsigned I) const LLVM_READONLY {
+    return const_cast<BacktickInfixExpr *>(this)->getOperand(I);
+  }
+
+  /// The extent of the expression *as written*, which the semantic form does
+  /// not give: BuildCallExpr takes a non-member call's range from its
+  /// synthesized callee, so the desugared call begins at the operator slot
+  /// rather than at its own first argument, and ends at the closing backtick
+  /// rather than at the right operand. Computing the range here makes the
+  /// wrapper span what the user typed. Modelled on
+  /// UserOperatorExpr::getBeginLoc, which has the same root cause.
+  //@{
   SourceLocation getBeginLoc() const LLVM_READONLY {
+    if (const Expr *L = getOperand(0))
+      return L->getBeginLoc();
     return Inner ? Inner->getBeginLoc() : SourceLocation();
   }
   SourceLocation getEndLoc() const LLVM_READONLY {
+    if (const Expr *R = getOperand(1))
+      return R->getEndLoc();
     return Inner ? Inner->getEndLoc() : SourceLocation();
   }
+  SourceRange getSourceRange() const LLVM_READONLY {
+    return SourceRange(getBeginLoc(), getEndLoc());
+  }
+  //@}
 
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == BacktickInfixExprClass;
