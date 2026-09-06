@@ -313,6 +313,82 @@ bool Parser::isFoldOperator(tok::TokenKind Kind) const {
   return isFoldOperator(getBinOpPrecedence(Kind, GreaterThanIsOperator, true));
 }
 
+TypeResult Parser::TryParseBacktickTypeSlot() {
+  if (!getLangOpts().CPlusPlus)
+    return TypeResult();
+
+  // Annotate qualified names, template-ids, typename-specifiers, and
+  // decltype up front. The expression parser performs the same annotation
+  // for these token sequences, so this does not change how non-type slots
+  // parse; it only makes the type/non-type decision visible here.
+  if (Tok.isOneOf(tok::kw_typename, tok::kw_decltype, tok::annot_cxxscope) ||
+      (Tok.is(tok::coloncolon) &&
+       !NextToken().isOneOf(tok::kw_new, tok::kw_delete)) ||
+      (Tok.is(tok::identifier) &&
+       NextToken().isOneOf(tok::coloncolon, tok::less))) {
+    if (TryAnnotateTypeOrScopeToken())
+      return TypeResult(true);
+  }
+
+  // The slot is a type only when the closing backtick follows the type
+  // immediately; otherwise it is an expression that merely starts with a
+  // type (a functional cast, for example), which ParseExpression handles.
+  if (Tok.is(tok::identifier) && NextToken().is(tok::backtick)) {
+    // A bare identifier. If it names a type -- or a class template, which
+    // deduces via CTAD exactly as T(x, y) would -- the slot is a type;
+    // a function or variable name stays an expression.
+    ParsedType T = Actions.getTypeName(
+        *Tok.getIdentifierInfo(), Tok.getLocation(), getCurScope(),
+        /*SS=*/nullptr, /*isClassName=*/false, /*HasTrailingDot=*/false,
+        /*ObjectType=*/nullptr, /*IsCtorOrDtorName=*/false,
+        /*WantNontrivialTypeSourceInfo=*/true);
+    if (!T)
+      return TypeResult();
+    ConsumeToken();
+    return T;
+  }
+
+  if (Tok.is(tok::annot_cxxscope) && GetLookAheadToken(1).is(tok::identifier) &&
+      GetLookAheadToken(2).is(tok::backtick)) {
+    // A qualified name that did not annotate as a type above: N::f stays
+    // an expression, but a qualified class template name is a type slot
+    // via CTAD. Probe tentatively so the scope specifier is restored when
+    // the name is not a type.
+    TentativeParsingAction TPA(*this);
+    CXXScopeSpec SS;
+    ParseOptionalCXXScopeSpecifier(SS, /*ObjectType=*/nullptr,
+                                   /*ObjectHasErrors=*/false,
+                                   /*EnteringContext=*/false);
+    ParsedType T = Actions.getTypeName(
+        *Tok.getIdentifierInfo(), Tok.getLocation(), getCurScope(), &SS,
+        /*isClassName=*/false, /*HasTrailingDot=*/false,
+        /*ObjectType=*/nullptr, /*IsCtorOrDtorName=*/false,
+        /*WantNontrivialTypeSourceInfo=*/true);
+    if (!T) {
+      TPA.Revert();
+      return TypeResult();
+    }
+    TPA.Commit();
+    ConsumeToken();
+    return T;
+  }
+
+  if (Tok.isSimpleTypeSpecifier(getLangOpts()) &&
+      NextToken().is(tok::backtick)) {
+    // A builtin type keyword, an annotated type (including a template
+    // parameter or template-id), or decltype: exactly the
+    // simple-type-specifier a functional cast accepts. Reuse its
+    // machinery so the TypeSourceInfo carries real locations.
+    DeclSpec DS(AttrFactory);
+    ParseCXXSimpleTypeSpecifier(DS);
+    Declarator DeclaratorInfo(DS, ParsedAttributesView::none(),
+                              DeclaratorContext::FunctionalCast);
+    return Actions.ActOnTypeName(DeclaratorInfo);
+  }
+
+  return TypeResult();
+}
+
 ExprResult
 Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
   prec::Level NextTokPrec = getBinOpPrecedence(Tok.getKind(),
@@ -401,6 +477,7 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
     // Special case handling for the ternary operator.
     ExprResult TernaryMiddle(true);
     ExprResult BacktickOp(true);
+    ParsedType BacktickOpType;
     SourceLocation BacktickCloseLoc;
     if (NextTokPrec == prec::Conditional) {
       if (getLangOpts().CPlusPlus11 && Tok.is(tok::l_brace)) {
@@ -478,9 +555,18 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
         Diag(Tok, diag::err_backtick_empty_slot);
         LHS = ExprError();
       } else {
-        BacktickOp = ParseExpression();
-        if (BacktickOp.isInvalid())
+        // D16: when the entire slot is a type-name, x `T` y is
+        // functional-style construction, T(x, y).
+        TypeResult SlotType = TryParseBacktickTypeSlot();
+        if (SlotType.isInvalid()) {
           LHS = ExprError();
+        } else if (SlotType.isUsable()) {
+          BacktickOpType = SlotType.get();
+        } else {
+          BacktickOp = ParseExpression();
+          if (BacktickOp.isInvalid())
+            LHS = ExprError();
+        }
       }
 
       BacktickCloseLoc = Tok.getLocation();
@@ -586,13 +672,19 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
                                          PrevTokLocation,
                                          {LHS.get()});
       } else if (OpToken.is(tok::backtick)) {
-        // Desugar x `f` y -> f(x, y).
+        // Desugar x `f` y -> f(x, y), or x `T` y -> T(x, y) (D16).
         Expr *Args[] = {LHS.get(), RHS.get()};
-        LHS = Actions.ActOnBacktickOperator(getCurScope(),
-                                            OpToken.getLocation(),
-                                            BacktickOp.get(),
-                                            BacktickCloseLoc,
-                                            LHS.get(), RHS.get());
+        if (BacktickOpType)
+          LHS = Actions.ActOnBacktickOperator(OpToken.getLocation(),
+                                              BacktickOpType,
+                                              BacktickCloseLoc,
+                                              LHS.get(), RHS.get());
+        else
+          LHS = Actions.ActOnBacktickOperator(getCurScope(),
+                                              OpToken.getLocation(),
+                                              BacktickOp.get(),
+                                              BacktickCloseLoc,
+                                              LHS.get(), RHS.get());
         if (LHS.isInvalid())
           LHS = Actions.CreateRecoveryExpr(Args[0]->getBeginLoc(),
                                            Args[1]->getEndLoc(),
