@@ -1,7 +1,10 @@
 // RUN: %clang_cc1 -std=c++17 -funicode-operators -analyze \
 // RUN:   -analyzer-config eagerly-assume=false \
 // RUN:   -analyzer-config suppress-null-return-paths=false \
-// RUN:   -analyzer-checker=core,debug.ExprInspection -verify %s
+// RUN:   -analyzer-checker=core,debug.ExprInspection -verify=expected,nosupp %s
+// RUN: %clang_cc1 -std=c++17 -funicode-operators -analyze \
+// RUN:   -analyzer-config eagerly-assume=false \
+// RUN:   -analyzer-checker=core,debug.ExprInspection -verify=expected %s
 // RUN: %clang_cc1 -std=c++17 -funicode-operators -analyze \
 // RUN:   -analyzer-checker=debug.DumpCFG \
 // RUN:   -analyzer-config cfg-temporary-dtors=true %s 2>&1 | FileCheck %s
@@ -9,8 +12,16 @@
 // A UserOperatorExpr is a transparent wrapper over the call `x ⊞ y` desugars
 // to. The analyzer must reason about it exactly as it reasons about that call:
 // the CFG looks through the wrapper, Environment resolves a read of it to the
-// call's binding, and LiveVariables keys liveness on the same expression the
-// binding uses.
+// call's binding, LiveVariables keys liveness on the same expression the
+// binding uses, and the bug reporter's tracker peels the wrapper before
+// looking for the graph node that computed the value.
+//
+// Two RUN lines analyze this file, differing only in
+// suppress-null-return-paths -- off in the first, at its default in the
+// second. `expected-` directives are checked by both; `nosupp-` only by the
+// first. A line carrying a `nosupp-` directive and no `expected-` one
+// therefore asserts two things at once: the report is emitted with the
+// suppression off, and it is not emitted with the suppression on.
 //
 // "Transparent" here is the analyzer's sense, not TreeTransform's. The node is
 // deliberately *not* transparent to transformation -- TransformUserOperatorExpr
@@ -71,28 +82,54 @@ int *identity(int *p, int) { return p; }
 // operator. Before the fix the operator forms produced no report at all,
 // because the result was UNKNOWN.
 //
-// This runs with suppress-null-return-paths=false deliberately. Under the
-// default the *explicit* calls here are suppressed (the null comes from an
-// inlined return) while the operator forms are not -- the wrapper hides the
-// call from the suppression's `CallEvent::isCallStmt` test. That divergence is
-// a separate defect, recorded rather than fixed here, and a parity test must
-// not be built on top of it.
+// All three are the shape suppress-null-return-paths exists for: the null
+// comes from an inlined callee's return. So with the suppression off all three
+// report, and at the default none of them does -- which the second RUN line
+// enforces by having no directive to match. That second half is new. It used
+// to be false: the wrapper hid the call from the suppression, so the operator
+// forms reported where the identically-desugaring call was silent, and this
+// file could only test parity by turning the suppression off. It now tests
+// parity at both settings.
 void bugs_are_still_found_infix() {
   int *p = nullptr;
   int *q = p ⊘ 0;
-  *q = 1; // expected-warning{{Dereference of null pointer}}
+  *q = 1; // nosupp-warning{{Dereference of null pointer}}
 }
 
 void bugs_are_still_found_prefix() {
   int *p = nullptr;
   int *q = ⊙ p;
-  *q = 1; // expected-warning{{Dereference of null pointer}}
+  *q = 1; // nosupp-warning{{Dereference of null pointer}}
 }
 
 void bugs_are_still_found_explicit() {
   int *p = nullptr;
   int *q = identity(p, 0);
-  *q = 1; // expected-warning{{Dereference of null pointer}}
+  *q = 1; // nosupp-warning{{Dereference of null pointer}}
+}
+
+// A bug the suppression was never meant to reach: the null is dereferenced in
+// an *operand*, so nothing about it came from a return. It must be found at
+// both settings, through either wrapper form and through the call alike --
+// this is the assertion that the analyzer still walks into a wrapped
+// expression, held at the default configuration where the three above are
+// silent.
+void operand_bugs_are_found_at_the_default_setting() {
+  int *p = nullptr;
+  int x = *p ⊞ 0; // expected-warning{{Dereference of null pointer}}
+  (void)x;
+}
+
+void operand_bugs_are_found_prefix() {
+  int *p = nullptr;
+  int x = ⊟ *p; // expected-warning{{Dereference of null pointer}}
+  (void)x;
+}
+
+void operand_bugs_are_found_explicit() {
+  int *p = nullptr;
+  int x = operator⊞(*p, 0); // expected-warning{{Dereference of null pointer}}
+  (void)x;
 }
 
 struct Res {
