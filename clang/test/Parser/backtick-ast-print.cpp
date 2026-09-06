@@ -67,5 +67,8 @@ template <class T> T t4(int a, int b) { return a `T` b; }
 // Not applicable here: the keyword-escape form. `kw` occupies operand and
 // declarator position, never the operator slot -- an escaped name between the
 // backticks is diagnosed ("expected expression between backticks"), so it can
-// never produce a BacktickInfixExpr. The escape's own -ast-print behaviour is
-// covered by clang/test/Parser/backtick-escape.cpp.
+// never produce a BacktickInfixExpr. The escape's own -ast-print round-trip
+// is a separate question, and is pinned by the -ast-print RUN lines in
+// clang/test/Parser/backtick-escape.cpp -- which that file did not have until
+// keyword-escape-round-trip was fixed, which is why the hole survived nine
+// steps behind this sentence.

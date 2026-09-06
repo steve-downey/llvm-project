@@ -583,6 +583,20 @@ void DeclPrinter::VisitDeclContext(DeclContext *DC, bool Indent) {
     Indentation -= Policy.Indentation;
 }
 
+/// The declarator-id as it must be *written*. The backtick keyword-escape
+/// yields an ordinary identifier whose spelling is a keyword, and the only way
+/// to write that spelling again is inside the escape, so a printer producing
+/// re-parseable source has to put it back. The three declarator printers below
+/// hand the name to the type printer as a placeholder string, which never
+/// reaches DeclarationName::print where the rest of the escaping happens.
+static std::string writtenDeclName(const NamedDecl *D,
+                                   const PrintingPolicy &Policy) {
+  const IdentifierInfo *II = D->getIdentifier();
+  if (Policy.BacktickKeywordEscape && II && II->getTokenID() != tok::identifier)
+    return ("`" + II->getName() + "`").str();
+  return D->getName().str();
+}
+
 void DeclPrinter::VisitTranslationUnitDecl(TranslationUnitDecl *D) {
   VisitDeclContext(D, false);
 }
@@ -595,7 +609,7 @@ void DeclPrinter::VisitTypedefDecl(TypedefDecl *D) {
       Out << "__module_private__ ";
   }
   QualType Ty = D->getTypeSourceInfo()->getType();
-  Ty.print(Out, Policy, D->getName(), Indentation);
+  Ty.print(Out, Policy, writtenDeclName(D, Policy), Indentation);
 
   if (std::optional<std::string> Attrs = prettyPrintAttributes(D))
     Out << ' ' << *Attrs;
@@ -947,7 +961,7 @@ void DeclPrinter::VisitFieldDecl(FieldDecl *D) {
     Out << "__module_private__ ";
 
   Out << D->getASTContext().getUnqualifiedObjCPointerType(D->getType()).
-         stream(Policy, D->getName(), Indentation);
+         stream(Policy, writtenDeclName(D, Policy), Indentation);
 
   if (D->isBitField()) {
     Out << " : ";
@@ -1016,10 +1030,12 @@ void DeclPrinter::printVarDeclSpecifiers(VarDecl *D) {
 
   // D->getName() is "" for a DecompositionDecl (it has no name of its own),
   // which is exactly the declarator we want for one: just the type.
+  // writtenDeclName keeps that, and restores the escape on a keyword name.
+  std::string WrittenName = writtenDeclName(D, Policy);
   printDeclType(T, (isa<ParmVarDecl>(D) && Policy.CleanUglifiedParameters &&
                     D->getIdentifier())
                        ? D->getIdentifier()->deuglifiedName()
-                       : D->getName());
+                       : StringRef(WrittenName));
 }
 
 void DeclPrinter::VisitVarDecl(VarDecl *D) {
