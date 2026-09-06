@@ -441,7 +441,15 @@ void clang::FormatASTNodeDiagnosticArgument(
         assert(Modifier.empty() && Argument.empty() &&
                "Invalid modifier for DeclarationName argument");
 
-      OS << DeclarationName::getFromOpaqueInteger(Val);
+      DeclarationName DN = DeclarationName::getFromOpaqueInteger(Val);
+      if (Context.getPrintingPolicy().BacktickKeywordEscape)
+        // The stream operator prints with a default-constructed policy, which
+        // drops the backtick keyword-escape and names the entity with a
+        // spelling no program can contain. The ak_nameddecl case below already
+        // uses the context's policy; this makes the two agree.
+        DN.print(OS, Context.getPrintingPolicy());
+      else
+        OS << DN;
       break;
     }
     case DiagnosticsEngine::ak_nameddecl: {

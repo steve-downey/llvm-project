@@ -6,7 +6,13 @@ int sub(int a, int b) { return a - b; }
 int mul(int a, int b) { return a * b; }
 
 // Basic desugar: x `f` y -> f(x, y)
-// AST: CallExpr {{.*}} 'int'
+//
+// The wrapper's range is pinned literally, not with a wildcard: it must span
+// the operands as written. The desugared call's own range is the synthesized
+// callee's -- the operator slot alone -- which is what BacktickInfixExpr
+// overrides getBeginLoc/getEndLoc to correct.
+// AST: BacktickInfixExpr {{.*}} <col:13, col:21> 'int'
+// AST-NEXT: CallExpr {{.*}} 'int'
 // AST-NEXT: ImplicitCastExpr
 // AST-NEXT: DeclRefExpr {{.*}} 'add'
 // AST-NEXT: IntegerLiteral {{.*}} 1
@@ -14,10 +20,11 @@ int mul(int a, int b) { return a * b; }
 int basic = 1 `add` 2;
 
 // Left-associativity: a `sub` b `mul` c == mul(sub(a,b), c)
-// AST: CallExpr {{.*}} 'int'
+// AST: BacktickInfixExpr {{.*}} <col:13, col:30> 'int'
+// AST-NEXT: CallExpr {{.*}} 'int'
 // AST-NEXT: ImplicitCastExpr
 // AST-NEXT: DeclRefExpr {{.*}} 'mul'
-// AST-NEXT: BacktickInfixExpr {{.*}} 'int'
+// AST-NEXT: BacktickInfixExpr {{.*}} <col:13, col:22> 'int'
 // AST-NEXT: CallExpr {{.*}} 'int'
 // AST-NEXT: ImplicitCastExpr
 // AST-NEXT: DeclRefExpr {{.*}} 'sub'
@@ -42,7 +49,9 @@ struct Pt {
 
 // Bare class name in the slot.
 // AST: VarDecl {{.*}} type_bare 'Pt'
-// AST: BacktickInfixExpr {{.*}} 'Pt'
+// A type slot desugars to construction, not a call; the range is recovered
+// from the construction node's arguments and spans the operands just the same.
+// AST: BacktickInfixExpr {{.*}} <col:16, col:23> 'Pt'
 // AST-NEXT: CXXTemporaryObjectExpr {{.*}} 'Pt' 'void (int, int)'
 // AST-NEXT: IntegerLiteral {{.*}} 1
 // AST-NEXT: IntegerLiteral {{.*}} 2
@@ -99,3 +108,12 @@ int type_hidden = 1 `both` 2;
 // AST: BacktickInfixExpr {{.*}} 'Pt'
 // AST-NEXT: CXXTemporaryObjectExpr {{.*}} 'Pt'
 void stmt_position(int a, int b) { a `Pt` b; }
+
+// A builtin with custom type checking rewrites the call to a node that is
+// neither a call nor a construction, so no operand is recoverable and the
+// range falls back to the semantic form's. The point of the case is that
+// asking for the range does not crash.
+typedef int v4i __attribute__((ext_vector_type(4)));
+// AST: BacktickInfixExpr {{.*}} <col:40, col:63> 'v4i'
+// AST-NEXT: ShuffleVectorExpr {{.*}} <col:40, col:63> 'v4i'
+v4i shuffled(v4i a, v4i b) { return a `__builtin_shufflevector` b; }

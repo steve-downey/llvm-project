@@ -4014,10 +4014,16 @@ defm reflection : BoolFOption<"reflection",
   PosFlag<SetTrue, [], [CC1Option],
           "Enable C++26 reflection">,
   NegFlag<SetFalse>>, ShouldParseIf<cplusplus.KeyPath>;
+// -fbacktick is a C++-only grammar extension: C has no operator-slot production
+// a backtick could appear in, and no declarator-id it could escape.  Without
+// ShouldParseIf the flag still changed C *tokenization*, and the effect was not
+// merely a lost diagnostic -- a C compilation with -fbacktick *accepted* the
+// C++ infix grammar.
 defm backtick : BoolFOption<"backtick",
   LangOpts<"Backtick">, DefaultFalse,
   PosFlag<SetTrue, [], [], "Enable backtick infix operator and identifier escaping">,
-  NegFlag<SetFalse>, BothFlags<[], [ClangOption, CC1Option]>>;
+  NegFlag<SetFalse>, BothFlags<[], [ClangOption, CC1Option]>>,
+  ShouldParseIf<cplusplus.KeyPath>;
 defm sized_deallocation : BoolFOption<"sized-deallocation",
   LangOpts<"SizedDeallocation">, Default<cpp14.KeyPath>,
   PosFlag<SetTrue, [], [], "Enable C++14 sized global deallocation functions">,
