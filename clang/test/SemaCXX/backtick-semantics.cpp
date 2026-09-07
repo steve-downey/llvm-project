@@ -1,7 +1,12 @@
 // Semantics test sweep for the backtick infix operator (S05).
-// Proves that desugaring to CallExpr inherits overload resolution, ADL,
+// Proves that desugaring to CallExpr inherits overload resolution,
 // templates, constexpr, value categories, and CodeGen identically to a
 // hand-written call.
+//
+// It does NOT cover argument-dependent lookup: section 2 below uses a
+// qualified name, which correctly gets no ADL either way and so says nothing
+// about the slot. ADL lives in backtick-adl.cpp; do not read this file as
+// covering it.
 
 // RUN: %clang_cc1 -fbacktick -std=c++17 -fsyntax-only -verify %s
 // RUN: %clang_cc1 -fbacktick -std=c++17 -emit-llvm -o - %s | FileCheck %s
@@ -22,7 +27,8 @@ static_assert(sizeof(r_ovl_int) == sizeof(int), "int overload");
 static_assert(sizeof(r_ovl_dbl) == sizeof(double), "double overload");
 
 // ---------------------------------------------------------------------------
-// 2. Qualified callee (also exercises the ADL-adjacent case)
+// 2. Qualified callee. NOT an ADL test -- a qualified name is exactly the
+//    case that gets no ADL in a call either. See backtick-adl.cpp.
 // ---------------------------------------------------------------------------
 namespace ns {
   struct T {};
