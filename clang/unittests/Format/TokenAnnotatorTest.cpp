@@ -4588,7 +4588,8 @@ TEST_F(TokenAnnotatorTest, BacktickTokenTypes) {
   EXPECT_TOKEN(Tokens[5], tok::backtick, TT_BacktickInfixOpen);
   EXPECT_TOKEN(Tokens[7], tok::backtick, TT_BacktickInfixClose);
 
-  // D8: CanBreakBefore = false immediately after open or before close.
+  // format-break-policy: CanBreakBefore = false immediately after open or
+  // before close.
   Tokens = annotate("a `f` b;");
   ASSERT_EQ(Tokens.size(), 7u) << Tokens;
   // Token[2] = 'f' (immediately after open backtick): no break allowed

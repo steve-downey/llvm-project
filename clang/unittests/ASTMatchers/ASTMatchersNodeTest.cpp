@@ -3165,6 +3165,62 @@ void f() {
   EXPECT_FALSE(Counts->getCountsRefs()[1]);
 }
 
+// The ASTMatchers surface of the backtick node, the counterpart of
+// ASTMatchersTestUnicodeOperators above on the Unicode branch.
+// matchesConditionally() runs both the static and the dynamic matcher and
+// fails if they disagree, so these also cover the Registry.cpp entry that
+// clang-query and clang-tidy's dynamic matchers use.
+namespace {
+const char *BacktickCode = R"(
+struct S { int v; };
+int add(S, S);
+int f(S a, S b) { return a `add` b; }
+)";
+const std::vector<std::string> BacktickArgs = {"-std=c++17", "-fbacktick"};
+} // namespace
+
+TEST(ASTMatchersTestBacktick, BacktickInfixExpr) {
+  EXPECT_TRUE(matchesConditionally(BacktickCode, backtickInfixExpr(), true,
+                                   BacktickArgs));
+
+  // The node exists only under the flag; a spelled call is not one.
+  EXPECT_TRUE(matchesConditionally("struct S {}; int add(S, S); "
+                                   "int f(S a, S b) { return add(a, b); }",
+                                   backtickInfixExpr(), false, BacktickArgs));
+
+  // It is not a CXXOperatorCallExpr: that node is welded to
+  // OverloadedOperatorKind, and the backtick slot names an ordinary function.
+  EXPECT_TRUE(matchesConditionally(BacktickCode, cxxOperatorCallExpr(), false,
+                                   BacktickArgs));
+}
+
+TEST(ASTMatchersTestBacktick, BacktickInfixExprTraversal) {
+  // As-is, the one child is the call the use desugars to.
+  EXPECT_TRUE(matchesConditionally(
+      BacktickCode, traverse(TK_AsIs, backtickInfixExpr(has(callExpr()))), true,
+      BacktickArgs));
+
+  // Ignoring unless spelled in source, the children are the operands as
+  // written; neither the call nor its synthesized callee appears in the
+  // source at all.
+  EXPECT_TRUE(matchesConditionally(
+      BacktickCode,
+      traverse(TK_IgnoreUnlessSpelledInSource,
+               backtickInfixExpr(
+                   has(declRefExpr(to(parmVarDecl(hasName("a"))))))),
+      true, BacktickArgs));
+  EXPECT_TRUE(matchesConditionally(
+      BacktickCode,
+      traverse(TK_IgnoreUnlessSpelledInSource,
+               backtickInfixExpr(
+                   has(declRefExpr(to(parmVarDecl(hasName("b"))))))),
+      true, BacktickArgs));
+  EXPECT_TRUE(matchesConditionally(
+      BacktickCode,
+      traverse(TK_IgnoreUnlessSpelledInSource, backtickInfixExpr(has(callExpr()))),
+      false, BacktickArgs));
+}
+
 TEST(ASTMatchersTest, Finder_DynamicOnlyAcceptsSomeMatchers) {
   MatchFinder Finder;
   EXPECT_TRUE(Finder.addDynamicMatcher(decl(), nullptr));
