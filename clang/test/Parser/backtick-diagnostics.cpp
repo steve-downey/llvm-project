@@ -13,6 +13,8 @@ int x2 = a `f b; // expected-error{{missing closing backtick for infix operator}
 
 // Parenthesised nesting is well-formed (D3): slot = (f `g` h), callee = that result.
 int x3 = a `(f)` b;
+// This is also the "bare nesting" spelling `a `g `b` f` c`: the two are
+// token-identical, so bare nesting is a chain and is accepted, not diagnosed.
 int x4 = a `g` b `f` c;
 
 // D16: a builtin type in the slot parses as construction and is rejected by
