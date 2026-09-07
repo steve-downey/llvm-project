@@ -3852,6 +3852,18 @@ private:
   /// (diagnostic already emitted).
   TypeResult TryParseBacktickTypeSlot();
 
+  /// Backtick infix operator slot: parse a bare unqualified name in the slot
+  /// as the *callee* it is, so that it reaches the call builder unresolved
+  /// and gets exactly the argument-dependent lookup the call `f(x, y)` gets
+  /// (design doc \S17.4, which is normative). Returns a usable result
+  /// carrying the unresolved id-expression when the slot is an unqualified
+  /// name -- with or without template arguments -- followed by the closing
+  /// backtick, an unset result when the slot is anything else, and an
+  /// invalid result on error. A qualified name, a member access or any other
+  /// expression in the slot is left to ParseExpression, which is the right
+  /// answer for it: the equivalent call gets no ADL either.
+  ExprResult TryParseBacktickCalleeSlot();
+
   /// Checks if the \p Level is valid for use in a fold expression.
   bool isFoldOperator(prec::Level Level) const;
 

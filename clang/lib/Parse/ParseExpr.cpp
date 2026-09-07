@@ -388,6 +388,59 @@ TypeResult Parser::TryParseBacktickTypeSlot() {
   return TypeResult();
 }
 
+ExprResult Parser::TryParseBacktickCalleeSlot() {
+  if (!getLangOpts().CPlusPlus)
+    return ExprResult();
+
+  // The slot is a callee, not an ordinary operand. Parsing it with
+  // ParseExpression resolves a bare name before Sema::BuildCallExpr ever
+  // sees it, and Sema::UseArgumentDependentLookup refuses ADL on its first
+  // line when there is no trailing '(' -- so the operator form would bind a
+  // different function from the call it is sugar for. Here the closing
+  // backtick is the trailing '('.
+  //
+  // Only an unqualified name qualifies, which is exactly where ADL binds in
+  // a call: a bare identifier, or a template-id over one. GCC's fix for the
+  // same defect stopped at the bare identifier and left the template-id
+  // silently on the old path, so both forms are handled together.
+  if (!Tok.isOneOf(tok::identifier, tok::annot_template_id))
+    return ExprResult();
+  if (Tok.is(tok::identifier) && !NextToken().isOneOf(tok::backtick, tok::less))
+    return ExprResult();
+
+  // The name must be the whole slot. When it is not -- `f<int> + g`, or the
+  // relational expression `a < b` -- fall back to the expression parser with
+  // the token stream as it was.
+  TentativeParsingAction TPA(*this);
+  CXXScopeSpec SS; // deliberately empty: an unqualified name only
+  SourceLocation TemplateKWLoc;
+  UnqualifiedId Name;
+  if (ParseUnqualifiedId(SS, /*ObjectType=*/nullptr,
+                         /*ObjectHadErrors=*/false, /*EnteringContext=*/false,
+                         /*AllowDestructorName=*/false,
+                         /*AllowConstructorName=*/false,
+                         /*AllowDeductionGuide=*/false, &TemplateKWLoc, Name)) {
+    TPA.Commit();
+    return ExprError();
+  }
+  if (Tok.isNot(tok::backtick)) {
+    TPA.Revert();
+    return ExprResult();
+  }
+  TPA.Commit();
+
+  ExprResult Callee =
+      Actions.ActOnIdExpression(getCurScope(), SS, TemplateKWLoc, Name,
+                                /*HasTrailingLParen=*/true,
+                                /*IsAddressOfOperand=*/false);
+  // An unset result means typo correction replaced the name with a keyword,
+  // which cannot be a callee. The tokens are consumed either way, so this is
+  // an error rather than a fall-through to ParseExpression.
+  if (Callee.isUnset())
+    return ExprError();
+  return Callee;
+}
+
 ExprResult
 Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
   prec::Level NextTokPrec = getBinOpPrecedence(Tok.getKind(),
@@ -561,7 +614,12 @@ Parser::ParseRHSOfBinaryExpression(ExprResult LHS, prec::Level MinPrec) {
         } else if (SlotType.isUsable()) {
           BacktickOpType = SlotType.get();
         } else {
-          BacktickOp = ParseExpression();
+          // A bare unqualified name in the slot is the callee, and must reach
+          // BuildCallExpr unresolved so that it gets the same ADL as the call
+          // it desugars to. Anything else is an ordinary expression.
+          BacktickOp = TryParseBacktickCalleeSlot();
+          if (BacktickOp.isUnset())
+            BacktickOp = ParseExpression();
           if (BacktickOp.isInvalid())
             LHS = ExprError();
         }
