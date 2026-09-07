@@ -208,9 +208,6 @@ def err_backtick_empty_slot : Error<
     "expected expression between backticks">;
 def err_backtick_unterminated : Error<
     "missing closing backtick for infix operator">;
-def err_backtick_nested_requires_parens : Error<
-    "nested backtick infix operator in operator slot must be parenthesised"
-    " (e.g., 'x `(f `g` h)` y')">;
 
 // Backtick keyword-escape diagnostics (-fbacktick).
 def err_backtick_escape_not_keyword : Error<
