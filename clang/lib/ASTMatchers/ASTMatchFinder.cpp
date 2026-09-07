@@ -269,6 +269,21 @@ public:
 
     return match(*Node->getLHS()) && match(*Node->getRHS());
   }
+  bool TraverseBacktickInfixExpr(BacktickInfixExpr *Node) {
+    if (!Finder->isTraversalIgnoringImplicitNodes())
+      return VisitorBase::TraverseBacktickInfixExpr(Node);
+    if (!Node)
+      return true;
+    ScopedIncrement ScopedDepth(&CurrentDepth);
+
+    // As written, the children are the two operands; the call the use
+    // desugars to, and its synthesized callee, are not spelled in the source.
+    for (unsigned I = 0; I != 2; ++I)
+      if (Expr *Operand = Node->getOperand(I))
+        if (!match(*Operand))
+          return false;
+    return true;
+  }
   bool TraverseAttr(Attr *A) {
     if (A == nullptr ||
         (A->isImplicit() &&
@@ -536,6 +551,20 @@ public:
       {
         ASTNodeNotSpelledInSourceScope RAII(this, true);
         for (auto *SubStmt : RBO->children()) {
+          TraverseStmt(SubStmt);
+        }
+      }
+      return true;
+    } else if (auto *BIE = dyn_cast<BacktickInfixExpr>(S)) {
+      {
+        ASTNodeNotAsIsSourceScope RAII(this, true);
+        for (unsigned I = 0; I != 2; ++I)
+          if (Expr *Operand = BIE->getOperand(I))
+            TraverseStmt(Operand);
+      }
+      {
+        ASTNodeNotSpelledInSourceScope RAII(this, true);
+        for (auto *SubStmt : BIE->children()) {
           TraverseStmt(SubStmt);
         }
       }
