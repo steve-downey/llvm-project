@@ -1059,6 +1059,7 @@ unsigned ResultBuilder::getBasePriority(const NamedDecl *ND) {
     auto DeclNameKind = ND->getDeclName().getNameKind();
     if (DeclNameKind == DeclarationName::CXXOperatorName ||
         DeclNameKind == DeclarationName::CXXLiteralOperatorName ||
+        DeclNameKind == DeclarationName::CXXUserOperatorName ||
         DeclNameKind == DeclarationName::CXXConversionFunctionName)
       return CCP_Unlikely;
     return CCP_MemberDeclaration;
