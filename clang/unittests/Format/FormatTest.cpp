@@ -26644,8 +26644,9 @@ TEST_F(FormatTest, BacktickOperatorFormatting) {
   // Keyword-escape with namespace qualifier.
   verifyFormat("auto r = obj.`new`(1, 2);", "auto r=obj.`new`(1,2);");
 
-  // D8: when forced to wrap, the break occurs outside the backtick pair —
-  // after the close backtick — never immediately inside the delimiters.
+  // format-break-policy: when forced to wrap, the break occurs outside the
+  // backtick pair — after the close backtick — never immediately inside the
+  // delimiters.
   auto Style = getLLVMStyleWithColumns(14);
   // "x = a `f` b;" is 14 chars — exactly fits.
   verifyFormat("x = a `f` b;", Style);
@@ -26655,6 +26656,34 @@ TEST_F(FormatTest, BacktickOperatorFormatting) {
   verifyFormat("x = a `f`\n"
                "    b;",
                "x = a `f` b;", Style);
+}
+
+TEST_F(FormatTest, BacktickOperatorSlotSplitPenalty) {
+  // format-break-policy: a break inside the operator slot is legal but mildly
+  // disfavored, so where the formatter has a choice it breaks the surrounding
+  // expression and leaves the slot intact. Without the slot-interior
+  // SplitPenalty bump both qualified names cost the same and the slot is the
+  // one that gets split.
+  auto Style = getLLVMStyleWithColumns(40);
+  verifyFormat("int h() {\n"
+               "  return aaaa::bbbb::\n"
+               "      cccc `xxxx::yyyy::zzzz` dddd;\n"
+               "}",
+               "int h() { return aaaa::bbbb::cccc `xxxx::yyyy::zzzz` dddd; }",
+               Style);
+
+  // The known limit, pinned so it is documented rather than latent: when no
+  // alternative break fits, PenaltyExcessCharacter (1,000,000 per column)
+  // dominates any additive bump and the slot is split after all. A bump large
+  // enough to prevent that would make the slot a no-break zone, which
+  // format-break-policy deliberately rejects.
+  Style = getLLVMStyleWithColumns(50);
+  verifyFormat("int f(int aLongVariableNameHere,\n"
+               "      int anotherLongVariableName) {\n"
+               "  return aLongVariableNameHere `some::deeply::\n"
+               "      nested::plus` anotherLongVariableName;\n"
+               "}",
+               Style);
 }
 
 TEST_F(FormatTest, BacktickOperatorJSNonRegression) {

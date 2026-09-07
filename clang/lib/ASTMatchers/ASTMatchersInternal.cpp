@@ -933,6 +933,8 @@ const internal::VariadicDynCastAllOfMatcher<Stmt, CXXOperatorCallExpr>
     cxxOperatorCallExpr;
 const internal::VariadicDynCastAllOfMatcher<Stmt, CXXRewrittenBinaryOperator>
     cxxRewrittenBinaryOperator;
+const internal::VariadicDynCastAllOfMatcher<Stmt, BacktickInfixExpr>
+    backtickInfixExpr;
 const internal::VariadicDynCastAllOfMatcher<Stmt, CXXFoldExpr> cxxFoldExpr;
 const internal::VariadicDynCastAllOfMatcher<Stmt, Expr> expr;
 const internal::VariadicDynCastAllOfMatcher<Stmt, DeclRefExpr> declRefExpr;
