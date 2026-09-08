@@ -1619,13 +1619,19 @@ CallExpr *BacktickInfixExpr::getCallExpr() {
 Expr *BacktickInfixExpr::getOperand(unsigned I) {
   assert(I < 2 && "backtick infix operand index out of range");
 
-  // Recover the operands as written from the semantic form. The three shapes
+  // Recover the operands as written from the semantic form. The four shapes
   // are the ones StmtPrinter::VisitBacktickInfixExpr reconstructs the surface
   // syntax from: a call -- including the member form, whose object argument is
   // the operator slot and not an operand -- a construction from a type slot,
-  // and that construction's dependent form. Index, rather than count back from
-  // the end: a selected overload may have default arguments beyond the two
-  // operands.
+  // that construction's dependent form, and the parenthesized aggregate
+  // initialization a type slot naming an aggregate produces. Index, rather
+  // than count back from the end: a selected overload may have default
+  // arguments beyond the two operands.
+  //
+  // There is no general rule here, and that is the trap: every initialization
+  // form Sema can build for T(x, y) is another arm, and a missing arm is
+  // silent -- the operands are simply not found and the printer falls back to
+  // the desugaring.
   if (CallExpr *CE = getCallExpr())
     return I < CE->getNumArgs() ? CE->getArg(I) : nullptr;
 
@@ -1634,6 +1640,17 @@ Expr *BacktickInfixExpr::getOperand(unsigned I) {
     return I < TOE->getNumArgs() ? TOE->getArg(I) : nullptr;
   if (auto *UCE = dyn_cast<CXXUnresolvedConstructExpr>(E))
     return I < UCE->getNumArgs() ? UCE->getArg(I) : nullptr;
+  // A type slot naming an aggregate initializes through parenthesized
+  // aggregate initialization, so Sema hands back a CXXFunctionalCastExpr over
+  // a CXXParenListInitExpr rather than a CXXTemporaryObjectExpr. Take the
+  // user-written initializers: the full list can carry defaulted members
+  // beyond the two operands.
+  if (auto *FCE = dyn_cast<CXXFunctionalCastExpr>(E))
+    if (auto *PLIE =
+            dyn_cast<CXXParenListInitExpr>(FCE->getSubExpr()->IgnoreImplicit())) {
+      ArrayRef<Expr *> Written = PLIE->getUserSpecifiedInitExprs();
+      return I < Written.size() ? Written[I] : nullptr;
+    }
 
   return nullptr;
 }

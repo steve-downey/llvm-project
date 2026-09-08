@@ -1105,28 +1105,8 @@ Parser::ParseCastExpression(CastParseKind ParseKind, bool isAddressOfOperand,
     // Backtick keyword-escape in primary-expression position: `kw` -> identifier.
     // Position distinguishes this from the infix operator (post-operand in
     // ParseRHSOfBinaryExpression). Only keywords are accepted inside the escape.
-    SourceLocation OpenLoc = ConsumeToken(); // consume opening `; Tok = inner token
-    if (!Tok.getIdentifierInfo() ||
-        !Tok.getIdentifierInfo()->isKeyword(getLangOpts())) {
-      Diag(Tok.getLocation(), diag::err_backtick_escape_not_keyword);
+    if (ConsumeBacktickEscape())
       return ExprError();
-    }
-    IdentifierInfo *II = Tok.getIdentifierInfo();
-    SourceLocation IILoc = Tok.getLocation();
-    unsigned IILen = II->getLength();
-    ConsumeToken(); // consume keyword; Tok = closing backtick
-    if (!Tok.is(tok::backtick)) {
-      Diag(Tok.getLocation(), diag::err_backtick_escape_unterminated);
-      Diag(OpenLoc, diag::note_matching) << tok::backtick;
-      return ExprError();
-    }
-    ConsumeToken(); // consume closing backtick; Tok = real next token
-    // Push real-next back and synthesize the identifier as Tok.
-    PP.EnterToken(Tok, /*IsReinject=*/true);
-    Tok.setKind(tok::identifier);
-    Tok.setIdentifierInfo(II);
-    Tok.setLocation(IILoc);
-    Tok.setLength(IILen);
     goto ParseIdentifier;
   }
 
