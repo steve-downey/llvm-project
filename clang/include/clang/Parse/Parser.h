@@ -3893,7 +3893,17 @@ private:
   /// terminal, so this is called from every name position and not only from
   /// ParseUnqualifiedId. Returns true if a diagnostic was emitted, in which
   /// case the caller should recover as it would from a missing identifier.
-  bool ConsumeBacktickEscape();
+  ///
+  /// \p EscapeRange, if given, receives the opening and closing backtick
+  /// locations, which a caller forming an annotation token over the name
+  /// needs: annotations are matched against the cached token stream by
+  /// location, and the escape's extent is the backticks, not the keyword.
+  bool ConsumeBacktickEscape(SourceRange *EscapeRange = nullptr);
+
+  /// The source length of a backtick keyword-escape whose extent is \p
+  /// EscapeRange, for a token synthesized to stand at its opening backtick;
+  /// \p Fallback when the escape has no single spelling extent.
+  unsigned escapeTokenLength(SourceRange EscapeRange, unsigned Fallback) const;
 
   /// Checks if the \p Level is valid for use in a fold expression.
   bool isFoldOperator(prec::Level Level) const;

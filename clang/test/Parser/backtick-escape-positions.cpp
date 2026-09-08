@@ -90,3 +90,93 @@ void labelled() {
   if (n++ < 1)
     goto `goto`;
 }
+
+// --- a keyword-escaped name as the *final* component of a qualified type ----
+// The final component of a qualified name is read as an unqualified-id only
+// when it is an object or a function. When a type is wanted, the name is read
+// by the decl-specifier and typename-specifier paths instead, and those need
+// their own arm -- which is why N::`new` worked from the start and
+// N::`union` did not (design doc section 12).
+namespace `switch` {
+// CHECK: struct `union` {
+struct `union` { int a; struct S { int b; }; };
+// CHECK: struct `while` : `union` {
+struct `while` : `union` { };
+int `new` = 1;
+}
+// CHECK: `switch`::`union` q0;
+`switch`::`union` q0;
+// CHECK: struct `switch`::`union` q1;
+struct `switch`::`union` q1;
+// CHECK: using QA = `switch`::`union`;
+using QA = `switch`::`union`;
+// CHECK: `switch`::`union`::S q2;
+`switch`::`union`::S q2;
+// CHECK: void qparam(`switch`::`union`);
+void qparam(`switch`::`union`);
+// CHECK: `switch`::`union` qret();
+`switch`::`union` qret();
+// CHECK: template <class T> struct QW {
+template<class T> struct QW { };
+// CHECK: QW<`switch`::`union`> q3;
+QW<`switch`::`union`> q3;
+// CHECK: struct QD : `switch`::`union` {
+// CHECK: QD() : `switch`::`union`() {
+struct QD : `switch`::`union` { QD() : `switch`::`union`() { } };
+int qblock() {
+  // CHECK: `switch`::`union` q4;
+  `switch`::`union` q4;
+  return sizeof(`switch`::`union`) + static_cast<`switch`::`union`>(q4).a +
+         `switch`::`new`;
+}
+// A dependent qualified name after 'typename' reads its final component in a
+// third place again.
+// CHECK: template <class T> struct QT {
+// CHECK-NEXT: typename T::`union` m;
+template<class T> struct QT { typename T::`union` m; };
+QT<`switch`::`union`::S> *qt0;
+
+// --- an escaped class name, defined out of line, including its constructor --
+// CHECK: struct `static` {
+struct `static` { `static`(); void `new`(); };
+// CHECK: `static`::`static`() {
+`static`::`static`() { }
+// CHECK: void `static`::`new`() {
+void `static`::`new`() { }
+
+// --- an escape whose keyword is a *type* keyword -----------------------------
+// Clang's keywords carry no binding, so these were never in doubt here; GCC
+// binds `int' and its siblings at global scope for the benefit of code that
+// looks builtin types up by name, and had to be taught that an escaped
+// declaration is not redeclaring one. Pinned in both suites: the keyword still
+// names the builtin in the same translation unit, and the escaped name is an
+// ordinary identifier that mangles as itself.
+// CHECK: int `int` = 0;
+int `int` = 0;
+// CHECK: void `long`() {
+void `long`() { }
+// CHECK: using `char` = double;
+using `char` = double;
+// CHECK: struct `bool` {
+struct `bool` { int a; };
+// CHECK: template <class T> using `float` = T;
+template<class T> using `float` = T;
+// CHECK: enum `short` {
+enum `short` { SA };
+// CHECK: namespace `void` {
+namespace `void` { int x; }
+int type_keywords() {
+  int builtin = 1;              // the keyword still means the type
+  long builtin2 = 2;
+  // CHECK: `bool` v{3};
+  `bool` v{3};
+  // CHECK: `char` d = 1.5;
+  `char` d = 1.5;
+  // CHECK: `float`<int> f = 4;
+  `float`<int> f = 4;
+  // CHECK: `short` e = SA;
+  `short` e = SA;
+  `long`();
+  return `int` + builtin + (int)builtin2 + v.a + (int)d + f + (int)e +
+         `void`::x;
+}
