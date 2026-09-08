@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -fbacktick -ast-print %s 2>&1 | FileCheck %s --check-prefix=PRINT
-// RUN: %clang_cc1 -fbacktick -ast-print %s 2>&1 | %clang_cc1 -fbacktick -fsyntax-only -x c++ -
+// RUN: %clang_cc1 -std=c++20 -fbacktick -ast-print %s 2>&1 | FileCheck %s --check-prefix=PRINT
+// RUN: %clang_cc1 -std=c++20 -fbacktick -ast-print %s 2>&1 | %clang_cc1 -std=c++20 -fbacktick -fsyntax-only -x c++ -
 
 // S11: -ast-print round-trip for backtick infix expressions.
 // The pretty-printer must re-emit the backtick form; re-parsing must succeed.
@@ -59,6 +59,21 @@ nn::Q t2 = 3 `nn::Q` 4;
 template <class A, class B> struct pp { pp(A, B); };
 // PRINT: {{.*}}5 `pp<int, int>` 6{{.*}}
 auto t3 = 5 `pp` 6;
+
+// An aggregate type slot initializes through parenthesized aggregate
+// initialization rather than through a constructor, so the operands come from
+// the CXXParenListInitExpr under the functional cast. Printing Agg(1, 2) here
+// would be the desugaring, not the surface syntax.
+struct Agg { int x, y; };
+// PRINT: {{.*}}1 `Agg` 2{{.*}}
+Agg t5 = 1 `Agg` 2;
+
+// The same shape under CTAD, printed as the deduced specialization for the
+// same reason the constructor form is: the type is recovered from the
+// semantic node.
+template <class T> struct aggT { T x; T y; };
+// PRINT: {{.*}}3 `aggT<int>` 4{{.*}}
+auto t6 = 3 `aggT` 4;
 
 // Dependent construction prints the written type.
 // PRINT: {{.*}}a `T` b{{.*}}
