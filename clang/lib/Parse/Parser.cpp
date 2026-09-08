@@ -2611,6 +2611,53 @@ void Parser::diagnoseUseOfC11Keyword(const Token &Tok) {
       << Tok.getName();
 }
 
+/// isBacktickEscapeAt - True if a whole backtick keyword-escape, ` kw `, sits
+/// at the token \p N ahead of the current one.
+bool Parser::isBacktickEscapeAt(unsigned N) {
+  if (!getLangOpts().Backtick || !GetLookAheadToken(N).is(tok::backtick))
+    return false;
+  const Token &Kw = GetLookAheadToken(N + 1);
+  return Kw.getIdentifierInfo() &&
+         Kw.getIdentifierInfo()->isKeyword(getLangOpts()) &&
+         GetLookAheadToken(N + 2).is(tok::backtick);
+}
+
+/// ConsumeBacktickEscape - Parse `` ` kw ` `` and rewrite Tok into the
+/// identifier "kw", pushing the token that followed the escape back so that
+/// the caller finds it exactly where it would after consuming an identifier.
+///
+/// [lex.name]: an escaped-identifier may appear wherever the grammar uses
+/// identifier as a terminal. That is why this is a helper and not an arm of
+/// ParseUnqualifiedId: a class-head-name, a namespace-name, an enumerator, a
+/// template parameter name and a label all read a bare identifier token in
+/// their own parser, and each of them calls this instead.
+bool Parser::ConsumeBacktickEscape() {
+  assert(isBacktickEscape() && "not at a backtick keyword-escape");
+  SourceLocation OpenLoc = ConsumeToken(); // consume opening `; Tok = inner
+  if (!Tok.getIdentifierInfo() ||
+      !Tok.getIdentifierInfo()->isKeyword(getLangOpts())) {
+    Diag(Tok.getLocation(), diag::err_backtick_escape_not_keyword);
+    return true;
+  }
+  IdentifierInfo *II = Tok.getIdentifierInfo();
+  SourceLocation IILoc = Tok.getLocation();
+  unsigned IILen = II->getLength();
+  ConsumeToken(); // consume keyword; Tok = closing backtick
+  if (!Tok.is(tok::backtick)) {
+    Diag(Tok.getLocation(), diag::err_backtick_escape_unterminated);
+    Diag(OpenLoc, diag::note_matching) << tok::backtick;
+    return true;
+  }
+  ConsumeToken(); // consume closing backtick; Tok = real next token
+  // Push real-next back and synthesize the identifier as Tok.
+  PP.EnterToken(Tok, /*IsReinject=*/true);
+  Tok.setKind(tok::identifier);
+  Tok.setIdentifierInfo(II);
+  Tok.setLocation(IILoc);
+  Tok.setLength(IILen);
+  return false;
+}
+
 bool BalancedDelimiterTracker::diagnoseOverflow() {
   P.Diag(P.Tok, diag::err_bracket_depth_exceeded)
     << P.getLangOpts().BracketDepth;

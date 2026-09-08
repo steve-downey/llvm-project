@@ -143,6 +143,13 @@ StmtResult Parser::ParseStatementOrDeclarationAfterAttributes(
   // the token to end in a semicolon (in which case SemiError should be set),
   // or they directly 'return;' if not.
 Retry:
+  // A label may be named by a keyword escape: `try`: ...
+  // Only the ':' after the escape tells that apart from an expression
+  // statement that begins with one, and the escape is three tokens wide, so
+  // this looks past the whole of it before consuming anything.
+  if (isBacktickEscapeFollowedBy(tok::colon) && ConsumeBacktickEscape())
+    return StmtError();
+
   tok::TokenKind Kind  = Tok.getKind();
   SourceLocation AtLoc;
   switch (Kind) {
@@ -2406,6 +2413,10 @@ StmtResult Parser::ParseGotoStatement() {
   SourceLocation GotoLoc = ConsumeToken();  // eat the 'goto'.
 
   StmtResult Res;
+  // The label jumped to may be a keyword escape: goto `try`;
+  if (isBacktickEscape() && ConsumeBacktickEscape())
+    return StmtError();
+
   if (Tok.is(tok::identifier)) {
     LabelDecl *LD = Actions.LookupOrCreateLabel(Tok.getIdentifierInfo(),
                                                 Tok.getLocation());

@@ -3864,6 +3864,37 @@ private:
   /// answer for it: the equivalent call gets no ADL either.
   ExprResult TryParseBacktickCalleeSlot();
 
+  /// True if the current token opens a backtick keyword-escape, `` ` kw ` ``.
+  /// The lexer produces tok::backtick only when -fbacktick is on, so a build
+  /// without the flag cannot reach an escape arm at all; the LangOpts test is
+  /// belt and braces.
+  bool isBacktickEscape() const {
+    return getLangOpts().Backtick && Tok.is(tok::backtick);
+  }
+
+  /// True if a whole backtick keyword-escape starts \p N tokens ahead of the
+  /// current one (0 being the current token). A name position that decides
+  /// what it is looking at by lookahead has to step over three tokens where it
+  /// used to step over one, so it asks this instead of testing for an
+  /// identifier.
+  bool isBacktickEscapeAt(unsigned N);
+
+  /// True if a backtick keyword-escape starts at the current token and the
+  /// token after the escape is \p K. A label is told apart from an expression
+  /// statement that begins with an escape only by the ':' after it.
+  bool isBacktickEscapeFollowedBy(tok::TokenKind K) {
+    return isBacktickEscapeAt(0) && GetLookAheadToken(3).is(K);
+  }
+
+  /// Consume a backtick keyword-escape and rewrite the current token into the
+  /// escaped identifier, leaving the token that followed the escape where a
+  /// caller would find it after consuming an identifier. Per [lex.name] an
+  /// escaped-identifier may appear wherever the grammar uses identifier as a
+  /// terminal, so this is called from every name position and not only from
+  /// ParseUnqualifiedId. Returns true if a diagnostic was emitted, in which
+  /// case the caller should recover as it would from a missing identifier.
+  bool ConsumeBacktickEscape();
+
   /// Checks if the \p Level is valid for use in a fold expression.
   bool isFoldOperator(prec::Level Level) const;
 

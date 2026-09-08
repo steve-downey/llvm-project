@@ -293,7 +293,9 @@ void StmtPrinter::VisitDefaultStmt(DefaultStmt *Node) {
 }
 
 void StmtPrinter::VisitLabelStmt(LabelStmt *Node) {
-  Indent(-1) << Node->getName() << ":" << NL;
+  Indent(-1);
+  Node->getDecl()->printName(OS, Policy);
+  OS << ":" << NL;
   PrintStmt(Node->getSubStmt(), 0);
 }
 
@@ -493,7 +495,9 @@ void StmtPrinter::VisitMSDependentExistsStmt(MSDependentExistsStmt *Node) {
 }
 
 void StmtPrinter::VisitGotoStmt(GotoStmt *Node) {
-  Indent() << "goto " << Node->getLabel()->getName() << ";";
+  Indent() << "goto ";
+  Node->getLabel()->printName(OS, Policy);
+  OS << ";";
   if (Policy.IncludeNewlines) OS << NL;
 }
 

@@ -910,6 +910,18 @@ inline const StreamingDiagnostic &operator<<(const StreamingDiagnostic &PD,
 
 raw_ostream &operator<<(raw_ostream &OS, DeclarationNameInfo DNInfo);
 
+/// Print \p II's spelling, wrapped in a backtick keyword-escape (`` `kw` ``)
+/// when \p Policy asks for the escape and the spelling is a keyword in this
+/// compilation. Under -fbacktick the escape is the only way to write such a
+/// name, so a printer that emits it bare emits source that does not re-parse
+/// (design doc keyword-escape-printing).
+///
+/// DeclarationName::print already does this for names it reaches. This is for
+/// the printers that reach an identifier without going through it: the type
+/// printer, the nested-name-specifier printer, and labels.
+void printIdentifierSpelling(raw_ostream &OS, const IdentifierInfo *II,
+                             const PrintingPolicy &Policy);
+
 } // namespace clang
 
 namespace llvm {
