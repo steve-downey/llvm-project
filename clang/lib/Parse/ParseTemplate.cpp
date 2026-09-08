@@ -401,10 +401,15 @@ Parser::TPResult Parser::isStartOfTemplateTypeParameter() {
       break;
 
     default:
+      // A keyword escape names the parameter: template<class `new`>.  It is
+      // three tokens where an identifier is one, so the token to look at
+      // after it is four ahead and not two.
+      if (isBacktickEscapeAt(1))
+        break;
       return TPResult::False;
     }
 
-    switch (GetLookAheadToken(2).getKind()) {
+    switch (GetLookAheadToken(isBacktickEscapeAt(1) ? 4 : 2).getKind()) {
     case tok::equal:
     case tok::comma:
     case tok::greater:
@@ -415,6 +420,11 @@ Parser::TPResult Parser::isStartOfTemplateTypeParameter() {
       return TPResult::False;
     }
   }
+
+  // The type-constraint may name a concept declared with a keyword escape:
+  // template<`class` T> ...
+  if (isBacktickEscape() && ConsumeBacktickEscape())
+    return TPResult::Error;
 
   if (TryAnnotateTypeConstraint())
     return TPResult::Error;
@@ -440,9 +450,12 @@ Parser::TPResult Parser::isStartOfTemplateTypeParameter() {
   //   parameter-declaration.
   Token Next = NextToken();
 
-  // If we have an identifier, skip over it.
+  // If we have an identifier, skip over it -- or over a keyword escape
+  // standing in for one, which is three tokens rather than one.
   if (Next.getKind() == tok::identifier)
     Next = GetLookAheadToken(2);
+  else if (isBacktickEscapeAt(1))
+    Next = GetLookAheadToken(4);
 
   switch (Next.getKind()) {
   case tok::equal:
@@ -631,6 +644,11 @@ NamedDecl *Parser::ParseTypeParameter(unsigned Depth, unsigned Position) {
            : diag::ext_variadic_templates);
   }
 
+  // A template parameter name may be a keyword escape:
+  //   template<class `new`> struct S { };
+  if (isBacktickEscape() && ConsumeBacktickEscape())
+    return nullptr;
+
   // Grab the template parameter name (if given)
   SourceLocation NameLoc = Tok.getLocation();
   IdentifierInfo *ParamName = nullptr;
@@ -776,6 +794,11 @@ NamedDecl *Parser::ParseTemplateTemplateParameter(unsigned Depth,
          getLangOpts().CPlusPlus11
            ? diag::warn_cxx98_compat_variadic_templates
            : diag::ext_variadic_templates);
+
+  // As for a type parameter, the name may be a keyword escape:
+  //   template<template<class> class `new`> struct S { };
+  if (isBacktickEscape() && ConsumeBacktickEscape())
+    return nullptr;
 
   // Get the identifier, if given.
   NameLoc = Tok.getLocation();

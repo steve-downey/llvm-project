@@ -1064,6 +1064,22 @@ Parser::isCXXDeclarationSpecifier(ImplicitTypenameContext AllowImplicitTypename,
              GetLookAheadToken(Lookahead + 1).isOneOf(tok::amp, tok::ampamp)));
   };
   switch (Tok.getKind()) {
+  case tok::backtick: {
+    // A type-name may be a keyword escape: void f(`union` u).  This predicate
+    // runs inside the tentative-parse token cache, so it must not consume the
+    // escape or rewrite Tok -- doing that trips
+    // Preprocessor::AnnotatePreviousCachedTokens, which asserts that an
+    // annotation ends at the most recently cached token.  Answer by looking
+    // the escaped name up instead, and leave the parse to
+    // ParseDeclarationSpecifiers, which does consume it.
+    if (!isBacktickEscapeAt(0))
+      return TPResult::False;
+    const Token &Kw = GetLookAheadToken(1);
+    return Actions.getTypeName(*Kw.getIdentifierInfo(), Kw.getLocation(),
+                               getCurScope())
+               ? TPResult::True
+               : TPResult::False;
+  }
   case tok::identifier: {
     if (GetLookAheadToken(1).is(tok::ellipsis) &&
         GetLookAheadToken(2).is(tok::l_square)) {
