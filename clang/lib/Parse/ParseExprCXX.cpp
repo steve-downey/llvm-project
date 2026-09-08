@@ -396,8 +396,18 @@ bool Parser::ParseOptionalCXXScopeSpecifier(
     if (isBacktickEscape()) {
       if (!isBacktickEscapeFollowedBy(tok::coloncolon))
         break;
-      if (ConsumeBacktickEscape())
+      SourceRange EscapeRange;
+      if (ConsumeBacktickEscape(&EscapeRange))
         return true;
+      // The component's source range is the whole escape.  This is not
+      // cosmetic: SS.getRange() becomes the location range of the annotation
+      // token formed from this nested-name-specifier, and an annotation that
+      // began at the keyword would leave the opening backtick in the token
+      // cache in front of it, so a backtracking parse would resume on a stray
+      // '`'.  It is also the truthful range -- the escape is part of the
+      // name's spelling.
+      Tok.setLocation(EscapeRange.getBegin());
+      Tok.setLength(escapeTokenLength(EscapeRange, Tok.getLength()));
     } else if (Tok.isNot(tok::identifier))
       break;
 
