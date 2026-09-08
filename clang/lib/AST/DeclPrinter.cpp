@@ -627,8 +627,10 @@ void DeclPrinter::VisitEnumDecl(EnumDecl *D) {
   if (std::optional<std::string> Attrs = prettyPrintAttributes(D))
     Out << ' ' << *Attrs;
 
-  if (D->getDeclName())
-    Out << ' ' << D->getDeclName();
+  if (D->getDeclName()) {
+    Out << ' ';
+    D->getDeclName().print(Out, Policy);
+  }
 
   if (D->isFixed())
     Out << " : " << D->getIntegerType().stream(Policy);
@@ -1084,8 +1086,10 @@ void DeclPrinter::VisitNamespaceDecl(NamespaceDecl *D) {
     Out << "inline ";
 
   Out << "namespace ";
-  if (D->getDeclName())
-    Out << D->getDeclName() << ' ';
+  if (D->getDeclName()) {
+    D->getDeclName().print(Out, Policy);
+    Out << ' ';
+  }
   Out << "{\n";
 
   VisitDeclContext(D);
@@ -1292,12 +1296,14 @@ void DeclPrinter::VisitTemplateDecl(const TemplateDecl *D) {
       if (Policy.CleanUglifiedParameters && TTP->getIdentifier())
         Out << TTP->getIdentifier()->deuglifiedName();
       else
-        Out << TTP->getDeclName();
+        TTP->getDeclName().print(Out, Policy);
     }
   } else if (auto *TD = D->getTemplatedDecl())
     Visit(TD);
   else if (const auto *Concept = dyn_cast<ConceptDecl>(D)) {
-    Out << "concept " << Concept->getName() << " = " ;
+    Out << "concept ";
+    Concept->getDeclName().print(Out, Policy);
+    Out << " = ";
     Concept->getConstraintExpr()->printPretty(Out, nullptr, Policy, Indentation,
                                               "\n", &Context);
   }
@@ -1970,7 +1976,7 @@ void DeclPrinter::VisitTemplateTypeParmDecl(const TemplateTypeParmDecl *TTP) {
     if (Policy.CleanUglifiedParameters && TTP->getIdentifier())
       Out << TTP->getIdentifier()->deuglifiedName();
     else
-      Out << TTP->getDeclName();
+      TTP->getDeclName().print(Out, Policy);
   }
 
   if (TTP->hasDefaultArgument() && !TTP->defaultArgumentWasInherited()) {

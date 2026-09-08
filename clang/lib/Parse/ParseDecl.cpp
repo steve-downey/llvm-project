@@ -3770,6 +3770,16 @@ void Parser::ParseDeclarationSpecifiers(
       // We're done with the declaration-specifiers.
       goto DoneWithDeclSpec;
 
+    case tok::backtick:
+      // A type-name may be a keyword escape: struct `union` { }; `union` u;
+      // In decl-specifier position a backtick is never the infix operator
+      // (design doc Â§12), so this is unambiguous.
+      if (ConsumeBacktickEscape()) {
+        DS.SetTypeSpecError();
+        goto DoneWithDeclSpec;
+      }
+      goto ParseIdentifier;
+
       // typedef-name
     case tok::kw___super:
     case tok::kw_decltype:
@@ -5167,6 +5177,14 @@ void Parser::ParseEnumSpecifier(SourceLocation StartLoc, DeclSpec &DS,
     SS = std::move(Spec);
   }
 
+  // An enum-name may be a keyword escape, scoped or not:
+  //   enum `union` { };  enum class `union` { };
+  if (isBacktickEscape() && ConsumeBacktickEscape()) {
+    DS.SetTypeSpecError();
+    SkipUntil(tok::comma, StopAtSemi);
+    return;
+  }
+
   // Must have either 'enum name' or 'enum {...}' or (rarely) 'enum : T { ... }'.
   if (Tok.isNot(tok::identifier) && Tok.isNot(tok::l_brace) &&
       Tok.isNot(tok::colon)) {
@@ -5495,6 +5513,10 @@ void Parser::ParseEnumBody(SourceLocation StartLoc, Decl *EnumDecl,
 
   // Parse the enumerator-list.
   while (Tok.isNot(tok::r_brace)) {
+    // An enumerator may be named by a keyword escape: enum E { `new` };
+    if (isBacktickEscape() && ConsumeBacktickEscape())
+      break;
+
     // Parse enumerator. If failed, try skipping till the start of the next
     // enumerator definition.
     if (Tok.isNot(tok::identifier)) {

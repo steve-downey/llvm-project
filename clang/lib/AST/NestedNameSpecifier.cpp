@@ -97,9 +97,10 @@ void NestedNameSpecifier::print(raw_ostream &OS, const PrintingPolicy &Policy,
     Prefix.print(OS, Policy);
     if (const auto *NS = dyn_cast<NamespaceDecl>(Namespace)) {
       assert(!NS->isAnonymousNamespace());
-      OS << NS->getName();
+      printIdentifierSpelling(OS, NS->getIdentifier(), Policy);
     } else {
-      OS << cast<NamespaceAliasDecl>(Namespace)->getName();
+      printIdentifierSpelling(
+          OS, cast<NamespaceAliasDecl>(Namespace)->getIdentifier(), Policy);
     }
     break;
   }

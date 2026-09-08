@@ -294,7 +294,9 @@ void StmtPrinter::VisitDefaultStmt(DefaultStmt *Node) {
 }
 
 void StmtPrinter::VisitLabelStmt(LabelStmt *Node) {
-  Indent(-1) << Node->getName() << ":" << NL;
+  Indent(-1);
+  Node->getDecl()->printName(OS, Policy);
+  OS << ":" << NL;
   PrintStmt(Node->getSubStmt(), 0);
 }
 
@@ -494,7 +496,9 @@ void StmtPrinter::VisitMSDependentExistsStmt(MSDependentExistsStmt *Node) {
 }
 
 void StmtPrinter::VisitGotoStmt(GotoStmt *Node) {
-  Indent() << "goto " << Node->getLabel()->getName() << ";";
+  Indent() << "goto ";
+  Node->getLabel()->printName(OS, Policy);
+  OS << ";";
   if (Policy.IncludeNewlines) OS << NL;
 }
 
@@ -1666,6 +1670,25 @@ void StmtPrinter::VisitBacktickInfixExpr(BacktickInfixExpr *Node) {
     PrintExpr(UCE->getArg(1));
     return;
   }
+  // A type slot naming an aggregate does not construct through a constructor:
+  // it initializes through parenthesized aggregate initialization, so Sema
+  // builds a CXXFunctionalCastExpr over a CXXParenListInitExpr. Fourth shape,
+  // same recovery.
+  if (auto *FCE = dyn_cast<CXXFunctionalCastExpr>(Inner))
+    if (auto *PLIE =
+            dyn_cast<CXXParenListInitExpr>(FCE->getSubExpr()->IgnoreImplicit());
+        PLIE && PLIE->getUserSpecifiedInitExprs().size() >= 2) {
+      ArrayRef<Expr *> Written = PLIE->getUserSpecifiedInitExprs();
+      PrintExpr(Written[0]);
+      OS << " `";
+      // The type comes from the semantic node, as it does for the
+      // constructor shape above: a CTAD slot therefore prints its deduced
+      // specialization, which re-parses with the same meaning.
+      FCE->getType().print(OS, Policy);
+      OS << "` ";
+      PrintExpr(Written[1]);
+      return;
+    }
   PrintExpr(Node->getSubExpr());
 }
 
