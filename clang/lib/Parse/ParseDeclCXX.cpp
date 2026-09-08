@@ -63,6 +63,10 @@ Parser::DeclGroupPtrTy Parser::ParseNamespace(DeclaratorContext Context,
     }
   }
 
+  // A namespace-name may be a keyword escape: namespace `new` { }
+  if (isBacktickEscape() && ConsumeBacktickEscape())
+    return nullptr;
+
   if (Tok.is(tok::identifier)) {
     Ident = Tok.getIdentifierInfo();
     IdentLoc = ConsumeToken(); // eat the identifier.
@@ -503,6 +507,12 @@ Decl *Parser::ParseUsingDirective(DeclaratorContext Context,
 
   IdentifierInfo *NamespcName = nullptr;
   SourceLocation IdentLoc = SourceLocation();
+
+  // The namespace named may be a keyword escape: using namespace `new`;
+  if (isBacktickEscape() && ConsumeBacktickEscape()) {
+    SkipUntil(tok::semi);
+    return nullptr;
+  }
 
   // Parse namespace-name.
   if (Tok.isNot(tok::identifier)) {
@@ -1363,6 +1373,11 @@ TypeResult Parser::ParseBaseTypeSpecifier(SourceLocation &BaseLoc,
                                      /*EnteringContext=*/false))
     return true;
 
+  // A base-specifier names a class, and a class may be named by a keyword
+  // escape: struct D : `union` { };
+  if (isBacktickEscape() && ConsumeBacktickEscape())
+    return true;
+
   BaseLoc = Tok.getLocation();
 
   // Parse decltype-specifier
@@ -1785,6 +1800,13 @@ void Parser::ParseClassSpecifier(tok::TokenKind TagTokKind,
     if (ParseOptionalCXXScopeSpecifier(Spec, /*ObjectType=*/nullptr,
                                        /*ObjectHasErrors=*/false,
                                        EnteringContext)) {
+      DS.SetTypeSpecError();
+      HasValidSpec = false;
+    }
+    // A class-head-name may be a keyword escape: struct `union` { }
+    // Done here rather than beside the identifier test below so that the
+    // qualified form, struct N::`class` { }, works too.
+    if (isBacktickEscape() && ConsumeBacktickEscape()) {
       DS.SetTypeSpecError();
       HasValidSpec = false;
     }
@@ -3881,6 +3903,12 @@ MemInitResult Parser::ParseMemInitializer(Decl *ConstructorDecl) {
   if (ParseOptionalCXXScopeSpecifier(SS, /*ObjectType=*/nullptr,
                                      /*ObjectHasErrors=*/false,
                                      /*EnteringContext=*/false))
+    return true;
+
+  // A mem-initializer names a member or a base, and either may be a keyword
+  // escape: D() : `new`(0) { }.  Done before IdLoc is taken so that the name
+  // is located at the keyword, as it is everywhere else.
+  if (isBacktickEscape() && ConsumeBacktickEscape())
     return true;
 
   // : identifier

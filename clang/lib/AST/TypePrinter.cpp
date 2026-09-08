@@ -1266,8 +1266,7 @@ void TypePrinter::printTypeSpec(NamedDecl *D, raw_ostream &OS) {
   if (!Policy.SuppressScope)
     D->printNestedNameSpecifier(OS, Policy);
 
-  IdentifierInfo *II = D->getIdentifier();
-  OS << II->getName();
+  printIdentifierSpelling(OS, D->getIdentifier(), Policy);
   spaceBeforePlaceHolder(OS);
 }
 
@@ -1282,7 +1281,7 @@ void TypePrinter::printUnresolvedUsingBefore(const UnresolvedUsingType *T,
   } else {
     T->getQualifier().print(OS, Policy);
   }
-  OS << D->getIdentifier()->getName();
+  printIdentifierSpelling(OS, D->getIdentifier(), Policy);
   spaceBeforePlaceHolder(OS);
 }
 
@@ -1299,7 +1298,7 @@ void TypePrinter::printUsingBefore(const UsingType *T, raw_ostream &OS) {
   } else {
     T->getQualifier().print(OS, Policy);
   }
-  OS << D->getIdentifier()->getName();
+  printIdentifierSpelling(OS, D->getIdentifier(), Policy);
   spaceBeforePlaceHolder(OS);
 }
 
@@ -1315,7 +1314,7 @@ void TypePrinter::printTypedefBefore(const TypedefType *T, raw_ostream &OS) {
   } else {
     T->getQualifier().print(OS, Policy);
   }
-  OS << D->getIdentifier()->getName();
+  printIdentifierSpelling(OS, D->getIdentifier(), Policy);
   spaceBeforePlaceHolder(OS);
 }
 
@@ -1594,7 +1593,7 @@ void TypePrinter::printTagType(const TagType *T, raw_ostream &OS) {
   }
 
   if (const IdentifierInfo *II = D->getIdentifier())
-    OS << II->getName();
+    printIdentifierSpelling(OS, II, Policy);
   else {
     clang::PrintingPolicy Copy(Policy);
 
@@ -1694,10 +1693,12 @@ void TypePrinter::printTemplateTypeParmBefore(const TemplateTypeParmType *T,
       OS << ' ';
     }
     OS << "auto";
-  } else if (IdentifierInfo *Id = T->getIdentifier())
-    OS << (Policy.CleanUglifiedParameters ? Id->deuglifiedName()
-                                          : Id->getName());
-  else
+  } else if (IdentifierInfo *Id = T->getIdentifier()) {
+    if (Policy.CleanUglifiedParameters)
+      OS << Id->deuglifiedName();
+    else
+      printIdentifierSpelling(OS, Id, Policy);
+  } else
     OS << "type-parameter-" << T->getDepth() << '-' << T->getIndex();
 
   spaceBeforePlaceHolder(OS);
@@ -1740,10 +1741,12 @@ void TypePrinter::printSubstTemplateTypeParmPackBefore(
         OS << ' ';
       }
       OS << "auto";
-    } else if (IdentifierInfo *Id = D->getIdentifier())
-      OS << (Policy.CleanUglifiedParameters ? Id->deuglifiedName()
-                                            : Id->getName());
-    else
+    } else if (IdentifierInfo *Id = D->getIdentifier()) {
+      if (Policy.CleanUglifiedParameters)
+        OS << Id->deuglifiedName();
+      else
+        printIdentifierSpelling(OS, Id, Policy);
+    } else
       OS << "type-parameter-" << D->getDepth() << '-' << D->getIndex();
 
     spaceBeforePlaceHolder(OS);
@@ -1817,7 +1820,7 @@ void TypePrinter::printDependentNameBefore(const DependentNameType *T,
   if (T->getKeyword() != ElaboratedTypeKeyword::None)
     OS << " ";
   T->getQualifier().print(OS, Policy);
-  OS << T->getIdentifier()->getName();
+  printIdentifierSpelling(OS, T->getIdentifier(), Policy);
   spaceBeforePlaceHolder(OS);
 }
 

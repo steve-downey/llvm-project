@@ -133,6 +133,14 @@ static void printCXXConstructorDestructorName(QualType ClassType,
   ClassType.print(OS, Policy);
 }
 
+void clang::printIdentifierSpelling(raw_ostream &OS, const IdentifierInfo *II,
+                                    const PrintingPolicy &Policy) {
+  if (Policy.BacktickKeywordEscape && II->getTokenID() != tok::identifier)
+    OS << '`' << II->getName() << '`';
+  else
+    OS << II->getName();
+}
+
 void DeclarationName::print(raw_ostream &OS,
                             const PrintingPolicy &Policy) const {
   switch (getNameKind()) {
