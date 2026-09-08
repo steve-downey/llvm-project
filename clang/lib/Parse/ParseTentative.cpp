@@ -1084,6 +1084,20 @@ Parser::isCXXDeclarationSpecifier(ImplicitTypenameContext AllowImplicitTypename,
     // ParseDeclarationSpecifiers, which does consume it.
     if (!isBacktickEscapeAt(0))
       return TPResult::False;
+    // `ns`::T -- an escape naming the first component of a
+    // nested-name-specifier.  Whether the whole qualified name is a type is a
+    // question about its *last* component, so annotate and ask again, exactly
+    // as the identifier case does for 'N::T'.  A namespace is not a type, so
+    // the getTypeName below would answer 'not a declaration' and the statement
+    // would be parsed as an expression.
+    if (isBacktickEscapeFollowedBy(tok::coloncolon)) {
+      if (TryAnnotateTypeOrScopeToken(AllowImplicitTypename))
+        return TPResult::Error;
+      if (isBacktickEscape())
+        return TPResult::False;
+      return isCXXDeclarationSpecifier(AllowImplicitTypename, BracedCastResult,
+                                       InvalidAsDeclSpec);
+    }
     const Token &Kw = GetLookAheadToken(1);
     return Actions.getTypeName(*Kw.getIdentifierInfo(), Kw.getLocation(),
                                getCurScope())
