@@ -1864,7 +1864,7 @@ bool Parser::TryAnnotateTypeOrScopeToken(
           Tok.is(tok::kw_typename) || Tok.is(tok::annot_cxxscope) ||
           Tok.is(tok::kw_decltype) || Tok.is(tok::annot_template_id) ||
           Tok.is(tok::kw___super) || Tok.is(tok::kw_auto) ||
-          Tok.is(tok::annot_pack_indexing_type)) &&
+          Tok.is(tok::annot_pack_indexing_type) || isBacktickEscape()) &&
          "Cannot be a type or scope token!");
 
   if (Tok.is(tok::kw_typename)) {
@@ -1927,6 +1927,13 @@ bool Parser::TryAnnotateTypeOrScopeToken(
       TemplateKWPresent = true;
     }
 
+    // The name after the nested-name-specifier may be a keyword escape:
+    // typename T::`union`.  It is read here, not by ParseUnqualifiedId, so it
+    // needs its own arm.
+    SourceRange TypenameEscape;
+    if (isBacktickEscape() && ConsumeBacktickEscape(&TypenameEscape))
+      return true;
+
     TypeResult Ty;
     if (Tok.is(tok::identifier)) {
       if (TemplateKWPresent && NextToken().isNot(tok::less)) {
@@ -1961,7 +1968,8 @@ bool Parser::TryAnnotateTypeOrScopeToken(
       return true;
     }
 
-    SourceLocation EndLoc = Tok.getLastLoc();
+    SourceLocation EndLoc =
+        TypenameEscape.isValid() ? TypenameEscape.getEnd() : Tok.getLastLoc();
     Tok.setKind(tok::annot_typename);
     setTypeAnnotation(Tok, Ty);
     Tok.setAnnotationEndLoc(EndLoc);
@@ -1989,6 +1997,48 @@ bool Parser::TryAnnotateTypeOrScopeToken(
 bool Parser::TryAnnotateTypeOrScopeTokenAfterScopeSpec(
     CXXScopeSpec &SS, bool IsNewScope,
     ImplicitTypenameContext AllowImplicitTypename) {
+  // The final component of a qualified type-name may be a keyword escape:
+  // N::`union`.  Once ParseOptionalCXXScopeSpecifier has taken the 'N::',
+  // that name is read here rather than by ParseUnqualifiedId, which is why an
+  // escape naming an object -- N::`new` -- has always worked and one naming a
+  // type had not ([lex.name]: an escaped-identifier may appear wherever the
+  // grammar uses identifier as a terminal).
+  //
+  // The escape is consumed only once the name is known to be a type.  On the
+  // other paths out of this function the token has to still be there: an
+  // expression's name is read by ParseUnqualifiedId, and AnnotateScopeToken
+  // rewinds the token cache by one, which is only correct if the token it is
+  // pushing back came from the cache.
+  if (isBacktickEscape()) {
+    const Token &Kw = GetLookAheadToken(1);
+    IdentifierInfo *II = Kw.getIdentifierInfo();
+    SourceLocation KwLoc = Kw.getLocation();
+    bool HasTrailingDot = GetLookAheadToken(3).is(tok::period);
+    if (II) {
+      if (ParsedType Ty = Actions.getTypeName(
+              *II, KwLoc, getCurScope(), &SS, false, HasTrailingDot, nullptr,
+              /*IsCtorOrDtorName=*/false,
+              /*NonTrivialTypeSourceInfo=*/true,
+              /*IsClassTemplateDeductionContext=*/true,
+              AllowImplicitTypename)) {
+        SourceRange NameEscape;
+        if (ConsumeBacktickEscape(&NameEscape))
+          return true;
+        SourceLocation BeginLoc =
+            SS.isNotEmpty() ? SS.getBeginLoc() : NameEscape.getBegin();
+        Tok.setKind(tok::annot_typename);
+        setTypeAnnotation(Tok, Ty);
+        // An escape's extent is its backticks.  The annotation is matched
+        // against the cached token stream by location, so it has to end on
+        // the closing '`' and not on the keyword between them.
+        Tok.setAnnotationEndLoc(NameEscape.getEnd());
+        Tok.setLocation(BeginLoc);
+        PP.AnnotateCachedTokens(Tok);
+        return false;
+      }
+    }
+  }
+
   if (Tok.is(tok::identifier)) {
     // Determine whether the identifier is a type name.
     if (ParsedType Ty = Actions.getTypeName(
@@ -2631,7 +2681,13 @@ bool Parser::isBacktickEscapeAt(unsigned N) {
 /// ParseUnqualifiedId: a class-head-name, a namespace-name, an enumerator, a
 /// template parameter name and a label all read a bare identifier token in
 /// their own parser, and each of them calls this instead.
-bool Parser::ConsumeBacktickEscape() {
+///
+/// \p EscapeRange, if given, receives the locations of the opening and
+/// closing backticks. A caller that forms an *annotation* token out of the
+/// name needs them: an annotation is matched against the cached token stream
+/// by source location, so it has to start at the backtick and end at the
+/// backtick rather than at the keyword between them.
+bool Parser::ConsumeBacktickEscape(SourceRange *EscapeRange) {
   assert(isBacktickEscape() && "not at a backtick keyword-escape");
   SourceLocation OpenLoc = ConsumeToken(); // consume opening `; Tok = inner
   if (!Tok.getIdentifierInfo() ||
@@ -2648,14 +2704,44 @@ bool Parser::ConsumeBacktickEscape() {
     Diag(OpenLoc, diag::note_matching) << tok::backtick;
     return true;
   }
+  SourceLocation CloseLoc = Tok.getLocation();
+  if (EscapeRange)
+    *EscapeRange = SourceRange(OpenLoc, CloseLoc);
   ConsumeToken(); // consume closing backtick; Tok = real next token
-  // Push real-next back and synthesize the identifier as Tok.
-  PP.EnterToken(Tok, /*IsReinject=*/true);
+  // Put real-next back and synthesize the identifier as Tok. When tokens are
+  // being cached for backtracking, rewind the cache instead of entering a
+  // token stream on top of it -- the same choice AnnotateScopeToken makes,
+  // and for the same reason: a token pushed with EnterToken is not in the
+  // cache, so the cache would be left pointing past a token the parser has
+  // not yet consumed, and an annotation formed over this name would be
+  // matched against the wrong cached range.
+  if (PP.isBacktrackEnabled())
+    PP.RevertCachedTokens(1);
+  else
+    PP.EnterToken(Tok, /*IsReinject=*/true);
   Tok.setKind(tok::identifier);
   Tok.setIdentifierInfo(II);
   Tok.setLocation(IILoc);
   Tok.setLength(IILen);
   return false;
+}
+
+/// escapeTokenLength - The source length of a backtick keyword-escape, for a
+/// token synthesized to stand at its opening backtick. Falls back to \p
+/// Fallback -- the keyword's own length -- when the two backticks are not
+/// plain file locations in one file, where there is no single spelling extent
+/// to report.
+unsigned Parser::escapeTokenLength(SourceRange EscapeRange,
+                                   unsigned Fallback) const {
+  SourceLocation B = EscapeRange.getBegin(), E = EscapeRange.getEnd();
+  if (B.isInvalid() || E.isInvalid() || !B.isFileID() || !E.isFileID())
+    return Fallback;
+  const SourceManager &SM = PP.getSourceManager();
+  std::pair<FileID, unsigned> DB = SM.getDecomposedLoc(B);
+  std::pair<FileID, unsigned> DE = SM.getDecomposedLoc(E);
+  if (DB.first != DE.first || DE.second < DB.second)
+    return Fallback;
+  return DE.second - DB.second + 1; // through the closing backtick
 }
 
 bool BalancedDelimiterTracker::diagnoseOverflow() {

@@ -3666,7 +3666,13 @@ void Parser::ParseDeclarationSpecifiers(
         continue;
       }
 
-      if (Next.isNot(tok::identifier))
+      // The name after the scope specifier may be a keyword escape --
+      // N::`union` g; -- in which case it is two tokens further on.  Nothing
+      // else about a qualified type-specifier changes.
+      const bool NameIsEscape = isBacktickEscapeAt(1);
+      const Token NameTok = NameIsEscape ? GetLookAheadToken(2) : Next;
+
+      if (!NameIsEscape && Next.isNot(tok::identifier))
         goto DoneWithDeclSpec;
 
       // Check whether this is a constructor declaration. If we're in a
@@ -3674,12 +3680,11 @@ void Parser::ParseDeclarationSpecifiers(
       // shape of a constructor declaration, process it as one.
       if ((DSContext == DeclSpecContext::DSC_top_level ||
            DSContext == DeclSpecContext::DSC_class) &&
-          Actions.isCurrentClassName(*Next.getIdentifierInfo(), getCurScope(),
-                                     &SS) &&
+          Actions.isCurrentClassName(*NameTok.getIdentifierInfo(),
+                                     getCurScope(), &SS) &&
           isConstructorDeclarator(/*Unqualified=*/false,
                                   /*DeductionGuide=*/false,
-                                  DS.isFriendSpecified(),
-                                  &TemplateInfo))
+                                  DS.isFriendSpecified(), &TemplateInfo))
         goto DoneWithDeclSpec;
 
       // C++20 [temp.spec] 13.9/6.
@@ -3689,8 +3694,8 @@ void Parser::ParseDeclarationSpecifiers(
       SuppressAccessChecks SAC(*this, IsTemplateSpecOrInst);
 
       ParsedType TypeRep = Actions.getTypeName(
-          *Next.getIdentifierInfo(), Next.getLocation(), getCurScope(), &SS,
-          false, false, nullptr,
+          *NameTok.getIdentifierInfo(), NameTok.getLocation(), getCurScope(),
+          &SS, false, false, nullptr,
           /*IsCtorOrDtorName=*/false,
           /*WantNontrivialTypeSourceInfo=*/true,
           isClassTemplateDeductionContext(DSContext), AllowImplicitTypename);
@@ -3704,6 +3709,12 @@ void Parser::ParseDeclarationSpecifiers(
       // typename.
       if (!TypeRep) {
         if (TryAnnotateTypeConstraint())
+          goto DoneWithDeclSpec;
+        // A keyword escape that does not name a type is not an implicit-int
+        // recovery candidate, and this loop makes no progress on one: the
+        // scope annotation and the escape are both still current, so falling
+        // through to 'continue' re-enters this case unchanged.
+        if (NameIsEscape)
           goto DoneWithDeclSpec;
         if (Tok.isNot(tok::annot_cxxscope) ||
             NextToken().isNot(tok::identifier))
@@ -3723,6 +3734,10 @@ void Parser::ParseDeclarationSpecifiers(
 
       DS.getTypeSpecScope() = SS;
       ConsumeAnnotationToken(); // The C++ scope.
+      if (NameIsEscape && ConsumeBacktickEscape()) {
+        DS.SetTypeSpecError();
+        goto DoneWithDeclSpec;
+      }
 
       isInvalid = DS.SetTypeSpecType(DeclSpec::TST_typename, Loc, PrevSpec,
                                      DiagID, TypeRep, Policy);
@@ -6138,6 +6153,13 @@ bool Parser::isConstructorDeclarator(bool IsUnqualified, bool DeductionGuide,
   if (Tok.is(tok::identifier)) {
     // We already know that we have a constructor name; just consume
     // the token.
+    ConsumeToken();
+  } else if (isBacktickEscape()) {
+    // The class, and so the constructor, may be named by a keyword escape:
+    // `union`::`union`().  This predicate runs inside a reverting tentative
+    // parse, so consuming here is undone with everything else.
+    if (ConsumeBacktickEscape())
+      return false;
     ConsumeToken();
   } else if (Tok.is(tok::annot_template_id)) {
     ConsumeAnnotationToken();
