@@ -17206,10 +17206,12 @@ bool Sema::CheckUserOperatorDeclaration(FunctionDecl *FnDecl) {
   // operator keeps it, unchanged and untouched.
   const auto *MD = dyn_cast<CXXMethodDecl>(FnDecl);
 
-  // A member user operator is declared with an implicit object parameter --
-  // U5's arity rule is stated in terms of one ("two parameters, or one as a
-  // member"). A static member function has none, so it can name neither form.
-  // This is the same diagnostic every non-call overloaded operator gets.
+  // A static member is rejected by choice, not by consequence: the arity rule
+  // below counts operands, so a two-parameter static member would have
+  // satisfied it.  The reason is that the desugaring equivalence is defined
+  // over exactly two spellings -- operator<op>(x, y) and x.operator<op>(y) --
+  // and a static member names neither (over-oper-restrictions, decided
+  // 2026-09-06).  The diagnostic is the one every non-call operator gets.
   if (MD && MD->isStatic())
     return Diag(FnDecl->getLocation(), diag::err_operator_overload_static)
            << FnDecl;
