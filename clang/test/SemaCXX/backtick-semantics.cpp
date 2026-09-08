@@ -1,7 +1,12 @@
 // Semantics test sweep for the backtick infix operator (S05).
-// Proves that desugaring to CallExpr inherits overload resolution, ADL,
+// Proves that desugaring to CallExpr inherits overload resolution,
 // templates, constexpr, value categories, and CodeGen identically to a
 // hand-written call.
+//
+// It does NOT cover argument-dependent lookup: section 2 below uses a
+// qualified name, which correctly gets no ADL either way and so says nothing
+// about the slot. ADL lives in backtick-adl.cpp; do not read this file as
+// covering it.
 
 // RUN: %clang_cc1 -fbacktick -std=c++17 -fsyntax-only -verify %s
 // RUN: %clang_cc1 -fbacktick -std=c++17 -emit-llvm -o - %s | FileCheck %s
@@ -22,7 +27,8 @@ static_assert(sizeof(r_ovl_int) == sizeof(int), "int overload");
 static_assert(sizeof(r_ovl_dbl) == sizeof(double), "double overload");
 
 // ---------------------------------------------------------------------------
-// 2. Qualified callee (also exercises the ADL-adjacent case)
+// 2. Qualified callee. NOT an ADL test -- a qualified name is exactly the
+//    case that gets no ADL in a call either. See backtick-adl.cpp.
 // ---------------------------------------------------------------------------
 namespace ns {
   struct T {};
@@ -73,7 +79,11 @@ int& r_ref = gx `ref_f` gy;  // result is lvalue; binding to ref must compile
 int r_lambda = 3 `[](int a, int b){ return a * b; }` 4;
 
 // ---------------------------------------------------------------------------
-// Note on DEV-04: bare nested backtick `x `f `g` h` y` silently parses as
-// h(f(x,g),y) (no error). This is documented but not tested here to avoid
-// anchoring the current mis-behavior; S06 or a future step will cover it.
+// Bare "nesting" -- `x `f `g` h` y` -- is token-identical to the
+// left-associative chain `x `f` g `h` y`, so it parses as h(f(x, g), y) and is
+// correctly accepted rather than diagnosed. That is the design's answer, not a
+// gap: see the design doc's nesting-vs-chaining and chaining-associativity
+// entries. To nest, parenthesise the slot. The chain form is pinned in
+// clang/test/Parser/backtick-diagnostics.cpp; the never-fired diagnostic that
+// once claimed otherwise was removed.
 // ---------------------------------------------------------------------------
