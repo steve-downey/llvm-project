@@ -146,6 +146,7 @@ RegistryMaps::RegistryMaps() {
   REGISTER_MATCHER(attr);
   REGISTER_MATCHER(autoType);
   REGISTER_MATCHER(autoreleasePoolStmt)
+  REGISTER_MATCHER(backtickInfixExpr);
   REGISTER_MATCHER(binaryConditionalOperator);
   REGISTER_MATCHER(binaryOperator);
   REGISTER_MATCHER(binaryOperation);

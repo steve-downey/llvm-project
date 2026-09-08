@@ -2183,6 +2183,19 @@ extern const internal::VariadicDynCastAllOfMatcher<Stmt,
 /// \endcode
 extern const internal::VariadicDynCastAllOfMatcher<Stmt, UserOperatorExpr>
     userOperatorExpr;
+/// Matches uses of the infix backtick operator, under -fbacktick. The node
+/// wraps the call the use desugars to; its operands as written are available
+/// as BacktickInfixExpr::getOperand(0) and (1), and the operator slot is the
+/// callee of the wrapped call. There is no fixed spelling table, so
+/// hasAnyOperatorName() does not apply to this node.
+///
+/// Example matches the infix use of add
+/// \code
+///   int add(int, int);
+///   int f(int a, int b) { return a `add` b; }
+/// \endcode
+extern const internal::VariadicDynCastAllOfMatcher<Stmt, BacktickInfixExpr>
+    backtickInfixExpr;
 
 /// Matches expressions.
 ///

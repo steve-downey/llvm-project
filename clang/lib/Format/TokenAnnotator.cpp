@@ -4333,6 +4333,15 @@ void TokenAnnotator::calculateFormattingInformation(AnnotatedLine &Line) const {
 
   bool InFunctionDecl = Line.MightBeFunctionDecl;
   bool InParameterList = false;
+  // format-break-policy: the backtick delimiters are unbreakable (see
+  // canBreakBefore), but a break *inside* the operator slot is legal. Make it
+  // mildly more expensive than the same break outside a slot, so a multi-token
+  // slot -- a qualified name, a template-id -- is slightly stickier than the
+  // same tokens written as an ordinary expression. Only the infix pair has an
+  // interior worth the rule: a keyword escape's slot is a single token.
+  // FIXME: Move magic numbers to a better place, with the ones above.
+  static constexpr unsigned PenaltyBreakInsideBacktickSlot = 100;
+  bool InBacktickSlot = false;
   for (auto *Current = First->Next; Current; Current = Current->Next) {
     const FormatToken *Prev = Current->Previous;
     if (Current->is(TT_LineComment)) {
@@ -4471,6 +4480,13 @@ void TokenAnnotator::calculateFormattingInformation(AnnotatedLine &Line) const {
     } else {
       Current->SplitPenalty += 20 * Current->BindingStrength;
     }
+
+    if (Current->is(TT_BacktickInfixClose))
+      InBacktickSlot = false;
+    else if (InBacktickSlot)
+      Current->SplitPenalty += PenaltyBreakInsideBacktickSlot;
+    if (Current->is(TT_BacktickInfixOpen))
+      InBacktickSlot = true;
   }
 
   calculateUnbreakableTailLengths(Line);
@@ -6408,8 +6424,8 @@ bool TokenAnnotator::mustBreakBefore(AnnotatedLine &Line,
 bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
                                     const FormatToken &Right) const {
   const FormatToken &Left = *Right.Previous;
-  // D8: hard-forbid breaks adjacent to backtick delimiters (after open, before
-  // close) for both infix and escape uses.
+  // format-break-policy: hard-forbid breaks adjacent to backtick delimiters
+  // (after open, before close) for both infix and escape uses.
   if (Left.isOneOf(TT_BacktickInfixOpen, TT_BacktickEscapeOpen) ||
       Right.isOneOf(TT_BacktickInfixClose, TT_BacktickEscapeClose)) {
     return false;
