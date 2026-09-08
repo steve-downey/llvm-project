@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -fbacktick -ast-dump %s 2>&1 | FileCheck %s --check-prefix=AST
-// RUN: %clang_cc1 -fbacktick -fsyntax-only %s
+// RUN: %clang_cc1 -std=c++20 -fbacktick -ast-dump %s 2>&1 | FileCheck %s --check-prefix=AST
+// RUN: %clang_cc1 -std=c++20 -fbacktick -fsyntax-only %s
 
 int add(int a, int b) { return a + b; }
 int sub(int a, int b) { return a - b; }
@@ -84,6 +84,26 @@ using PtAlias = Pt;
 // AST: VarDecl {{.*}} type_alias 'Pt'
 // AST: BacktickInfixExpr {{.*}} 'PtAlias'
 Pt type_alias = 5 `PtAlias` 6;
+
+// An aggregate in the slot does not construct through a constructor: it
+// initializes through parenthesized aggregate initialization, so Sema hands
+// back a CXXFunctionalCastExpr over a CXXParenListInitExpr. That is a fourth
+// inner shape, and the operands -- and so the range -- are recovered from the
+// written initializers rather than from a call or a construction.
+struct Agg { int x, y; };
+// AST: VarDecl {{.*}} type_agg 'Agg'
+// AST: BacktickInfixExpr {{.*}} <col:16, col:24> 'Agg'
+// AST-NEXT: CXXFunctionalCastExpr {{.*}} 'Agg'
+// AST-NEXT: CXXParenListInitExpr {{.*}} 'Agg'
+Agg type_agg = 1 `Agg` 2;
+
+// The same shape with a default member initializer: the full initializer list
+// carries the defaulted member, so only the user-written initializers are the
+// operands.
+struct Agg3 { int x, y, z = 7; };
+// AST: VarDecl {{.*}} type_agg3 'Agg3'
+// AST: BacktickInfixExpr {{.*}} <col:18, col:27> 'Agg3'
+Agg3 type_agg3 = 1 `Agg3` 2;
 
 // Dependent type in the slot: CXXUnresolvedConstructExpr until instantiation.
 // AST: FunctionTemplateDecl {{.*}} dep_construct
