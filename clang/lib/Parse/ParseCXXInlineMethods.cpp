@@ -993,7 +993,16 @@ bool Parser::ConsumeAndStoreFunctionPrologue(CachedTokens &Toks) {
         }
       }
 
-      if (Tok.is(tok::identifier)) {
+      if (isBacktickEscapeAt(0)) {
+        // A keyword escape may name the member or base being initialized.
+        // This loop caches tokens rather than parsing them, so all three of
+        // the escape's tokens go into the buffer untouched and
+        // ParseMemInitializer reads them back.
+        for (int I = 0; I != 3; ++I) {
+          Toks.push_back(Tok);
+          ConsumeAnyToken();
+        }
+      } else if (Tok.is(tok::identifier)) {
         Toks.push_back(Tok);
         ConsumeToken();
       } else {
