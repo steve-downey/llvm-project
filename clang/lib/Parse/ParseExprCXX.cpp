@@ -388,8 +388,17 @@ bool Parser::ParseOptionalCXXScopeSpecifier(
     }
 
     // The rest of the nested-name-specifier possibilities start with
-    // tok::identifier.
-    if (Tok.isNot(tok::identifier))
+    // tok::identifier -- or with a keyword escape standing in for one, as in
+    // `` `module`::inner::f() ``.  Only an escape actually followed by '::' is
+    // consumed here: anywhere else the loop is about to break, and this is one
+    // of the places the parser speculates, so nothing may be rewritten that is
+    // not certainly a nested-name-specifier component.
+    if (isBacktickEscape()) {
+      if (!isBacktickEscapeFollowedBy(tok::coloncolon))
+        break;
+      if (ConsumeBacktickEscape())
+        return true;
+    } else if (Tok.isNot(tok::identifier))
       break;
 
     IdentifierInfo &II = *Tok.getIdentifierInfo();
@@ -2633,29 +2642,11 @@ bool Parser::ParseUnqualifiedId(CXXScopeSpec &SS, ParsedType ObjectType,
 
   // Backtick keyword-escape in name position: `kw` -> identifier "kw".
   // Covers declarator-ids (void `new`();) and member access (obj.`delete`()).
-  if (getLangOpts().Backtick && Tok.is(tok::backtick)) {
-    SourceLocation OpenLoc = ConsumeToken(); // consume opening `; Tok = inner token
-    if (!Tok.getIdentifierInfo() ||
-        !Tok.getIdentifierInfo()->isKeyword(getLangOpts())) {
-      Diag(Tok.getLocation(), diag::err_backtick_escape_not_keyword);
+  // The other name positions do not come through here and call
+  // ConsumeBacktickEscape themselves.
+  if (isBacktickEscape()) {
+    if (ConsumeBacktickEscape())
       return true;
-    }
-    IdentifierInfo *II = Tok.getIdentifierInfo();
-    SourceLocation IILoc = Tok.getLocation();
-    unsigned IILen = II->getLength();
-    ConsumeToken(); // consume keyword; Tok = closing backtick
-    if (!Tok.is(tok::backtick)) {
-      Diag(Tok.getLocation(), diag::err_backtick_escape_unterminated);
-      Diag(OpenLoc, diag::note_matching) << tok::backtick;
-      return true;
-    }
-    ConsumeToken(); // consume closing backtick; Tok = real next token
-    // Push real-next back and synthesize the identifier as Tok.
-    PP.EnterToken(Tok, /*IsReinject=*/true);
-    Tok.setKind(tok::identifier);
-    Tok.setIdentifierInfo(II);
-    Tok.setLocation(IILoc);
-    Tok.setLength(IILen);
     goto ParseIdentifier;
   }
 
