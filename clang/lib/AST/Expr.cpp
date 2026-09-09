@@ -1619,21 +1619,36 @@ CallExpr *BacktickInfixExpr::getCallExpr() {
 Expr *BacktickInfixExpr::getOperand(unsigned I) {
   assert(I < 2 && "backtick infix operand index out of range");
 
-  // Recover the operands as written from the semantic form. The four shapes
+  // Recover the operands as written from the semantic form. The five shapes
   // are the ones StmtPrinter::VisitBacktickInfixExpr reconstructs the surface
-  // syntax from: a call -- including the member form, whose object argument is
-  // the operator slot and not an operand -- a construction from a type slot,
-  // that construction's dependent form, and the parenthesized aggregate
-  // initialization a type slot naming an aggregate produces. Index, rather
-  // than count back from the end: a selected overload may have default
-  // arguments beyond the two operands.
+  // syntax from: a call whose arguments are the operands -- including the
+  // member form, whose object argument is the operator slot and not an
+  // operand -- the call to operator() a class-typed callable in the slot
+  // produces, a construction from a type slot, that construction's dependent
+  // form, and the parenthesized aggregate initialization a type slot naming an
+  // aggregate produces. Index, rather than count back from the end: a selected
+  // overload may have default arguments beyond the two operands.
   //
-  // There is no general rule here, and that is the trap: every initialization
-  // form Sema can build for T(x, y) is another arm, and a missing arm is
-  // silent -- the operands are simply not found and the printer falls back to
-  // the desugaring.
-  if (CallExpr *CE = getCallExpr())
+  // There is no general rule here, and that is the trap: every form Sema can
+  // build for op(x, y) is another arm, and a missing arm is silent -- the
+  // operands are simply not found and the printer falls back to the
+  // desugaring. It is not only the initialization forms of a type slot that
+  // multiply. A *call* can be re-keyed too: Sema chooses the node for the
+  // written call shape, so the operands are not always at a fixed index of the
+  // call it built.
+  if (CallExpr *CE = getCallExpr()) {
+    // A slot whose value is a class-typed callable -- a lambda, a function
+    // object, a std::function, a data member holding one -- calls its
+    // operator(), and Sema builds a CXXOperatorCallExpr for that, not a plain
+    // CallExpr. Its argument 0 is the slot object and its arguments 1 and 2
+    // are the two operands. CXXOperatorCallExpr *is* a CallExpr, so this must
+    // come first: the generic arm below would take the slot object for the
+    // left operand and never read argument 2 at all.
+    if (auto *OCE = dyn_cast<CXXOperatorCallExpr>(CE);
+        OCE && OCE->getOperator() == OO_Call && OCE->getNumArgs() >= 3)
+      return OCE->getArg(I + 1);
     return I < CE->getNumArgs() ? CE->getArg(I) : nullptr;
+  }
 
   Expr *E = getSubExpr()->IgnoreImplicit();
   if (auto *TOE = dyn_cast<CXXTemporaryObjectExpr>(E))
