@@ -79,6 +79,57 @@ auto t6 = 3 `aggT` 4;
 // PRINT: {{.*}}a `T` b{{.*}}
 template <class T> T t4(int a, int b) { return a `T` b; }
 
+// A slot whose *value* is a class-typed callable is none of the shapes above.
+// The call is to the object's operator(), so Sema builds a
+// CXXOperatorCallExpr whose argument 0 is the slot object and whose
+// arguments 1 and 2 are the two operands. Read at the generic call shape's
+// indices it prints a different program -- `` obj `operator()` L `` -- with
+// the right operand dropped and the slot spelled as a free function nobody
+// declared. That one is caught by the re-parse RUN line above, since
+// `operator()` is not found by unqualified lookup; the shapes are pinned
+// individually anyway, because what the printer must produce is the surface
+// syntax and not merely something that compiles.
+struct Obj { int operator()(int, int) const; };
+Obj obj;
+// PRINT: {{.*}}L `obj` R{{.*}}
+int callable_named(int L, int R) { return L `obj` R; }
+
+// A lambda written directly in the slot. It prints over three lines, as any
+// lambda does, so the check is split rather than widened.
+// PRINT: return L `[](int a, int b) {
+// PRINT: }` R;
+int callable_inline(int L, int R) {
+  return L `[](int a, int b) { return a + b; }` R;
+}
+
+// A lambda held in a variable, which is what the paper's motivation helpers
+// are: inline constexpr auto lambdas.
+inline constexpr auto plus_fn = [](int a, int b) { return a + b; };
+// PRINT: {{.*}}L `plus_fn` R{{.*}}
+int callable_lambda_var(int L, int R) { return L `plus_fn` R; }
+
+// A std::plus-shaped class template specialization, materialized in the slot.
+template <class T> struct plusish { T operator()(T, T) const; };
+// PRINT: {{.*}}L `plusish<int>{}` R{{.*}}
+int callable_temporary(int L, int R) { return L `plusish<int>{}` R; }
+
+// A data member holding a functor: the slot is a member access whose type is
+// class-typed, not a bound member function.
+struct FnHolder { Obj fn; };
+FnHolder holder;
+// PRINT: {{.*}}L `holder.fn` R{{.*}}
+int callable_member(int L, int R) { return L `holder.fn` R; }
+
+// A callable used through its conversion to a function pointer -- a surrogate
+// call -- is *not* re-keyed: Sema builds a plain CallExpr whose callee is the
+// converted object, so the generic arm already handles it. The case is here so
+// that the boundary between the two arms is pinned rather than assumed.
+using FnPtr = int (*)(int, int);
+struct Surrogate { operator FnPtr() const; };
+Surrogate surr;
+// PRINT: {{.*}}L `surr` R{{.*}}
+int callable_surrogate(int L, int R) { return L `surr` R; }
+
 // Not applicable here: the keyword-escape form. `kw` occupies operand and
 // declarator position, never the operator slot -- an escaped name between the
 // backticks is diagnosed ("expected expression between backticks"), so it can
