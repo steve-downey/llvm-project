@@ -1635,7 +1635,9 @@ void StmtPrinter::VisitParenExpr(ParenExpr *Node) {
 
 void StmtPrinter::VisitBacktickInfixExpr(BacktickInfixExpr *Node) {
   // The backtick form is reconstructed from the structure of the desugared
-  // call: operand, callee, operand. A type slot (D16) desugars to
+  // call: operand, callee, operand -- except where Sema re-keyed the call,
+  // which it does when the slot is a class-typed callable and the call is a
+  // call to its operator(). A type slot (D16) desugars to
   // construction instead of a call, so recover the type and the two
   // written arguments from the construction node. Neither is always
   // recoverable -- a builtin with custom type checking rewrites the call
@@ -1644,6 +1646,25 @@ void StmtPrinter::VisitBacktickInfixExpr(BacktickInfixExpr *Node) {
   // form instead. That is still valid source with the same meaning, just
   // not the surface syntax.
   if (CallExpr *CE = Node->getCallExpr(); CE && CE->getNumArgs() >= 2) {
+    // A slot whose value is a class-typed callable -- a lambda, a function
+    // object, a std::function, a data member holding one -- calls its
+    // operator(), which Sema builds as a CXXOperatorCallExpr: argument 0 is
+    // the slot object, arguments 1 and 2 are the operands, and the callee is
+    // the implicit reference to operator(), which was never written. Test it
+    // before the generic shape, because CXXOperatorCallExpr *is* a CallExpr:
+    // the generic arm below prints the slot object as the left operand, the
+    // implicit callee as the operator, and the left operand as the right
+    // one -- a different program, and not even a compiling one, since
+    // operator() is not a name unqualified lookup finds.
+    if (auto *OCE = dyn_cast<CXXOperatorCallExpr>(CE);
+        OCE && OCE->getOperator() == OO_Call && OCE->getNumArgs() >= 3) {
+      PrintExpr(OCE->getArg(1));
+      OS << " `";
+      PrintExpr(OCE->getArg(0));
+      OS << "` ";
+      PrintExpr(OCE->getArg(2));
+      return;
+    }
     PrintExpr(CE->getArg(0));
     OS << " `";
     PrintExpr(CE->getCallee());
