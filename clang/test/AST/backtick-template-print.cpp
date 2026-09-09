@@ -88,3 +88,19 @@ template struct MkBox<Pair2>;
 // PRINT: return a `T` b;
 // PRINT: template<> struct MkBox<Pair2> {
 // PRINT: return a `Pair2` b;
+
+// 6. The slot is a class-typed callable after substitution. In the pattern the
+//    inner node is an ordinary dependent CallExpr, so the pattern always
+//    printed correctly; the *instantiation* is a CXXOperatorCallExpr for the
+//    object's operator(), which is a different shape at different argument
+//    indices. Only the second half of this case ever failed, which is exactly
+//    why it needs both halves.
+struct Callable { int operator()(int, int) const; };
+template <class F> struct CallBox {
+  int c(int a, int b, F f) { return a `f` b; }
+};
+template struct CallBox<Callable>;
+// PRINT: template <class F> struct CallBox {
+// PRINT: return a `f` b;
+// PRINT: template<> struct CallBox<Callable> {
+// PRINT: return a `f` b;

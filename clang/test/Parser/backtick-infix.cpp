@@ -137,3 +137,18 @@ typedef int v4i __attribute__((ext_vector_type(4)));
 // AST: BacktickInfixExpr {{.*}} <col:40, col:63> 'v4i'
 // AST-NEXT: ShuffleVectorExpr {{.*}} <col:40, col:63> 'v4i'
 v4i shuffled(v4i a, v4i b) { return a `__builtin_shufflevector` b; }
+
+// A slot whose *value* is a class-typed callable is called through its
+// operator(), and Sema keys that call as a CXXOperatorCallExpr: argument 0 is
+// the slot object, arguments 1 and 2 are the operands. CXXOperatorCallExpr is
+// a CallExpr, so read at the generic call shape's indices the "left operand"
+// found is the slot and the "right operand" is the left one -- and the range
+// comes back *inverted*, ending before it begins. That is why it is pinned as
+// literal columns here: the printing half of the same defect is loud, but an
+// inverted range is silent.
+struct Callable { int operator()(int, int) const; };
+Callable callable_obj;
+// AST: FunctionDecl {{.*}} callable_range
+// AST: BacktickInfixExpr {{.*}} <col:43, col:60> 'int'
+// AST-NEXT: CXXOperatorCallExpr {{.*}} 'int'
+int callable_range(int L, int R) { return L `callable_obj` R; }
