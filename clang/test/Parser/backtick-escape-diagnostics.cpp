@@ -10,7 +10,12 @@ void bad_number() {
   (void)`3`(); // expected-error {{backtick escape requires an identifier}}
 }
 void bad_punct() {
-  (void)`+`(); // expected-error {{backtick escape requires an identifier}}
+  // Two, not one: the recovery leaves the parser on the closing backtick,
+  // which opens an escape of its own over the '(' that follows it. That is
+  // the same shape the keyword-only rule recovered with and is why the error
+  // path has its own sweep (ops/probes/escape-errors.sh) -- what matters is
+  // that it stops.
+  (void)`+`(); // expected-error 2 {{backtick escape requires an identifier}}
 }
 void bad_string() {
   (void)`"s"`(); // expected-error {{backtick escape requires an identifier}}

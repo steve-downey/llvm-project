@@ -84,7 +84,15 @@ void call_ordinary() {
 // case pins for keywords: the parameter's type is named by an escape and
 // mangles as the ordinary source name it is.
 struct `and` { int v; };
-// AST: FunctionDecl {{.*}} takes_and 'void (int, and)'
+// Two halves of the dump, asserted together because they disagree and the
+// design doc claimed they did not. The *declaration's* own name is dumped
+// bare -- that is the ABI evidence, the name really is an ordinary identifier
+// -- while the same name *inside a type string* is dumped escaped. That split
+// is not new here and is not the content rule's doing: `union` behaves
+// identically, and has since the escape was built. It is recorded as
+// ast-dump-type-name-spelling in the backtick repo's ops/DEVIATIONS.md.
+// AST: CXXRecordDecl {{.*}} struct and definition
+// AST: FunctionDecl {{.*}} takes_and 'void (int, `and`)'
 // IR-LABEL: define {{.*}} @_Z9takes_andi3and
 // DEMANGLED-LABEL: define {{.*}} @takes_and(int, and)
 #ifndef USE_ONLY

@@ -20,11 +20,16 @@
 // written, so a declaration and its uses may be spelled either way in either
 // order. This is the whole of the decision; everything below is a consequence.
 
-// AST: VarDecl {{.*}} plain 'int'
-// PRINT20: int `foobar` = 0;
-// PRINT17: int `foobar` = 0;
+// The two DeclRefExprs are matched against the *same* VarDecl pointer, which
+// is the identity claim asserted rather than described: bare and escaped are
+// not two names that happen to resolve alike, they are one declaration.
+// AST: VarDecl [[FOOBAR:0x[0-9a-f]+]] {{.*}} foobar 'int'
+// PRINT20: int foobar = 0;
+// PRINT17: int foobar = 0;
 int `foobar` = 0;
+// AST: DeclRefExpr {{.*}} Var [[FOOBAR]] 'foobar'
 int read_bare() { return foobar; }        // the same variable
+// AST: DeclRefExpr {{.*}} Var [[FOOBAR]] 'foobar'
 int read_escaped() { return `foobar`; }   // and so is this
 
 int fn(int x);                            // declared bare
@@ -80,7 +85,7 @@ int `bitor` = 0;
 // a reserved identifier escaped or not; nothing here asks the escape to make
 // it anything else.
 // AST: VarDecl {{.*}} __foo 'int'
-// PRINT20: int `__foo` = 0;
+// PRINT20: int __foo = 0;
 int `__foo` = 0;
 
 // --- Positions other than a declarator-id -----------------------------------
