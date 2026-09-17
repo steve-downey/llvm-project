@@ -2662,19 +2662,34 @@ void Parser::diagnoseUseOfC11Keyword(const Token &Tok) {
       << Tok.getName();
 }
 
-/// isBacktickEscapeAt - True if a whole backtick keyword-escape, ` kw `, sits
-/// at the token \p N ahead of the current one.
+/// isEscapableWord - True if \p Tok is a word spelled as an identifier, which
+/// is what a backtick escape may contain: an ordinary identifier, a keyword,
+/// or an alternative token ([lex.digraph]) such as `and`, whose spelling is an
+/// identifier and whose IdentifierInfo carries a punctuator TokenID. All three
+/// are the same thing to the escape, because what it suppresses is the token
+/// meaning the language attached to an identifier-shaped word, and an ordinary
+/// identifier simply has none to suppress -- so `` `foobar` `` *is* `foobar`.
+/// See docs/backtick-operator-design.md, escape-content.
+///
+/// Punctuation is not a word: `&&` carries no IdentifierInfo, so `` `&&` `` is
+/// rejected while `` `and` `` is taken. The annotation test is not belt and
+/// braces; Token::getIdentifierInfo asserts on an annotation token, and a
+/// lookahead token can be one.
+static bool isEscapableWord(const Token &Tok) {
+  return !Tok.isAnnotation() && Tok.getIdentifierInfo() != nullptr;
+}
+
+/// isBacktickEscapeAt - True if a whole backtick escape, ` name `, sits at the
+/// token \p N ahead of the current one.
 bool Parser::isBacktickEscapeAt(unsigned N) {
   if (!getLangOpts().Backtick || !GetLookAheadToken(N).is(tok::backtick))
     return false;
-  const Token &Kw = GetLookAheadToken(N + 1);
-  return Kw.getIdentifierInfo() &&
-         Kw.getIdentifierInfo()->isKeyword(getLangOpts()) &&
+  return isEscapableWord(GetLookAheadToken(N + 1)) &&
          GetLookAheadToken(N + 2).is(tok::backtick);
 }
 
-/// ConsumeBacktickEscape - Parse `` ` kw ` `` and rewrite Tok into the
-/// identifier "kw", pushing the token that followed the escape back so that
+/// ConsumeBacktickEscape - Parse `` ` name ` `` and rewrite Tok into the
+/// identifier "name", pushing the token that followed the escape back so that
 /// the caller finds it exactly where it would after consuming an identifier.
 ///
 /// [lex.name]: an escaped-identifier may appear wherever the grammar uses
@@ -2689,17 +2704,16 @@ bool Parser::isBacktickEscapeAt(unsigned N) {
 /// by source location, so it has to start at the backtick and end at the
 /// backtick rather than at the keyword between them.
 bool Parser::ConsumeBacktickEscape(SourceRange *EscapeRange) {
-  assert(isBacktickEscape() && "not at a backtick keyword-escape");
+  assert(isBacktickEscape() && "not at a backtick escape");
   SourceLocation OpenLoc = ConsumeToken(); // consume opening `; Tok = inner
-  if (!Tok.getIdentifierInfo() ||
-      !Tok.getIdentifierInfo()->isKeyword(getLangOpts())) {
-    Diag(Tok.getLocation(), diag::err_backtick_escape_not_keyword);
+  if (!isEscapableWord(Tok)) {
+    Diag(Tok.getLocation(), diag::err_backtick_escape_not_identifier);
     return true;
   }
   IdentifierInfo *II = Tok.getIdentifierInfo();
   SourceLocation IILoc = Tok.getLocation();
   unsigned IILen = II->getLength();
-  ConsumeToken(); // consume keyword; Tok = closing backtick
+  ConsumeToken(); // consume the word; Tok = closing backtick
   if (!Tok.is(tok::backtick)) {
     Diag(Tok.getLocation(), diag::err_backtick_escape_unterminated);
     Diag(OpenLoc, diag::note_matching) << tok::backtick;

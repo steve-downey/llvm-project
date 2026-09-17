@@ -53,3 +53,40 @@ void member_dot() { Widget w; w.`delete`(); }
 // AST: FunctionDecl {{.*}} member_arrow 'void ()'
 // AST:  MemberExpr {{.*}} ->delete
 void member_arrow() { Widget *pw = nullptr; pw->`delete`(); }
+
+// ============================================================
+// Section 3: escape-content -- a non-keyword escape is the same symbol
+// ============================================================
+// The identity claim in mangled form. One function, defined with its name
+// escaped and called with its name bare, is one symbol; nothing in the
+// mangling records that a spelling had backticks around it, because nothing
+// in the AST does. Under the keyword-only content rule this section did not
+// compile at all: `ordinary` was an error, not a name.
+
+// AST: FunctionDecl {{.*}} ordinary 'int (int)'
+// IR-LABEL: define {{.*}} @_Z8ordinaryi
+// DEMANGLED-LABEL: define {{.*}} @ordinary(int)
+#ifndef USE_ONLY
+int `ordinary`(int x) { return x; }
+#else
+int ordinary(int);
+#endif
+
+// AST: FunctionDecl {{.*}} call_ordinary 'void ()'
+void call_ordinary() {
+  (void)ordinary(1);    // bare
+  (void)`ordinary`(2);  // escaped: the same callee, the same symbol
+}
+// TU2-DAG: call {{.*}} @_Z8ordinaryi
+// TU2-DAG: declare {{.*}} @_Z8ordinaryi
+
+// An alternative token as a type name, which is the shape the type-keyword
+// case pins for keywords: the parameter's type is named by an escape and
+// mangles as the ordinary source name it is.
+struct `and` { int v; };
+// AST: FunctionDecl {{.*}} takes_and 'void (int, and)'
+// IR-LABEL: define {{.*}} @_Z9takes_andi3and
+// DEMANGLED-LABEL: define {{.*}} @takes_and(int, and)
+#ifndef USE_ONLY
+void takes_and(int, `and`) {}
+#endif
