@@ -1,5 +1,7 @@
 // RUN: %clang_cc1 -std=c++20 -fbacktick -fsyntax-only -verify %s
-// RUN: %clang_cc1 -std=c++20 -fbacktick -ast-dump %s 2>&1 | FileCheck %s --check-prefix=AST
+// 'not', because the object-like macro case below is an intended error and
+// the AST checks are about what the rest of the file still declares.
+// RUN: not %clang_cc1 -std=c++20 -fbacktick -ast-dump %s 2>&1 | FileCheck %s --check-prefix=AST
 
 // escape-content, the preprocessor half: the escape is a phase 7 construct
 // built out of three preprocessing tokens, and phase 4 has never heard of it.
@@ -11,7 +13,11 @@
 // The escape does not shield it: by the time the parser sees the escape, the
 // name is gone and what stands between the backticks is the replacement list.
 #define OBJECT_MACRO 3
+// The second error is the ordinary recovery from a name position that got no
+// name; what matters is that the first one names the real problem and that
+// the parse stops rather than looping.
 int `OBJECT_MACRO` = 0; // expected-error {{backtick escape requires an identifier}}
+                        // expected-error@-1 {{expected unqualified-id}}
 
 // --- A function-like macro name is *not* replaced when escaped --------------
 // Not because the escape shields it, but because a function-like macro is
