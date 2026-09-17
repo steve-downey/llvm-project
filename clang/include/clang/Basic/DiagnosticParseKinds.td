@@ -210,8 +210,8 @@ def err_backtick_unterminated : Error<
     "missing closing backtick for infix operator">;
 
 // Backtick keyword-escape diagnostics (-fbacktick).
-def err_backtick_escape_not_keyword : Error<
-    "backtick keyword-escape requires a C++ keyword">;
+def err_backtick_escape_not_identifier : Error<
+    "backtick escape requires an identifier">;
 def err_backtick_escape_unterminated : Error<
     "missing closing backtick for keyword escape">;
 
