@@ -2,10 +2,30 @@
 
 // S07: Error cases for keyword-escape.
 
-// Non-keyword inside escape: ordinary identifier is rejected.
-void bad_nonkw() {
-  (void)`foo`(); // expected-error {{backtick keyword-escape requires a C++ keyword}}
+// Not an identifier inside the escape. escape-content makes the content rule
+// "any word spelled as an identifier", so what is left to reject is everything
+// that is not a word: a number, punctuation, a literal. `foo` used to be here
+// and is now well-formed; it lives in backtick-escape-identifier.cpp.
+void bad_number() {
+  (void)`3`(); // expected-error {{backtick escape requires an identifier}}
 }
+void bad_punct() {
+  // Two, not one: the recovery leaves the parser on the closing backtick,
+  // which opens an escape of its own over the '(' that follows it. That is
+  // the same shape the keyword-only rule recovered with and is why the error
+  // path has its own sweep (ops/probes/escape-errors.sh) -- what matters is
+  // that it stops.
+  (void)`+`(); // expected-error 2 {{backtick escape requires an identifier}}
+}
+void bad_string() {
+  (void)`"s"`(); // expected-error {{backtick escape requires an identifier}}
+}
+
+// --- The two spellings are one identifier -----------------------------------
+// The sharpest way to show identity is to make the spellings collide: this
+// conflicts only if `clash` and clash are the same name. (escape-content)
+extern int `clash`;  // expected-note {{previous declaration is here}}
+extern float clash;  // expected-error {{redeclaration of 'clash' with a different type}}
 
 // --- The escape is part of the spelling a diagnostic names ------------------
 // Under -fbacktick the escape is the only way to write this name, so a
@@ -33,7 +53,7 @@ namespace NS {
 struct `union` { int a; };
 int `new` = 1;
 }
-NS::`notakeyword` q0;   // expected-error {{backtick keyword-escape requires a C++ keyword}}
+NS::`3` q0;             // expected-error {{backtick escape requires an identifier}}
 NS::`union q1;          // expected-error {{missing closing backtick for keyword escape}}
                         // expected-note@-1 {{to match this '`'}}
 
