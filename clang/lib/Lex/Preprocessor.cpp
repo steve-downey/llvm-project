@@ -1293,7 +1293,21 @@ bool Preprocessor::LexModuleNameContinue(Token &Tok, SourceLocation UseLoc,
   };
 
   while (true) {
-    if (Tok.isNot(tok::identifier)) {
+    // Under -fbacktick a component may be escaped, `word`, and names the
+    // module the bare word would (docs/backtick-operator-design.md,
+    // escape-module-names). The word is an identifier, a keyword or an
+    // alternative token -- anything spelled as an identifier, which is what
+    // carries an IdentifierInfo -- and the rules for a bare component apply
+    // to it unchanged.
+    SourceLocation EscapeLoc;
+    if (getLangOpts().Backtick && Tok.is(tok::backtick)) {
+      EscapeLoc = Tok.getLocation();
+      ConsumeToken();
+      if (Tok.isAnnotation() || !Tok.getIdentifierInfo()) {
+        Diag(Tok, diag::err_pp_module_expected_ident) << Path.empty();
+        return true;
+      }
+    } else if (Tok.isNot(tok::identifier)) {
       if (Tok.is(tok::code_completion)) {
         CurLexer->cutOffLexing();
         CodeComplete->CodeCompleteModuleImport(UseLoc, Path);
@@ -1319,6 +1333,15 @@ bool Preprocessor::LexModuleNameContinue(Token &Tok, SourceLocation UseLoc,
     // Record this part of the module path.
     Path.emplace_back(Tok.getLocation(), Tok.getIdentifierInfo());
     ConsumeToken();
+
+    if (EscapeLoc.isValid()) {
+      if (Tok.isNot(tok::backtick)) {
+        Diag(Tok, diag::err_pp_module_escape_unterminated);
+        Diag(EscapeLoc, diag::note_matching) << tok::backtick;
+        return true;
+      }
+      ConsumeToken();
+    }
 
     if (Tok.isNot(tok::period))
       return false;
@@ -1380,7 +1403,9 @@ bool Preprocessor::HandleModuleName(StringRef DirType, SourceLocation UseLoc,
 ///     - preceded by an 'export' at the start of the logical line.
 ///   - Are followed by an identifier pp token (before macro expansion), or
 ///     - <, ", or : (but not ::) pp tokens for 'import', or
-///     - ; for 'module'
+///     - ; for 'module', or
+///     - under -fbacktick, a ` pp token, opening an escaped first component
+///       (docs/backtick-operator-design.md, escape-module-names)
 /// Otherwise the token is treated as an identifier.
 bool Preprocessor::HandleModuleContextualKeyword(Token &Result) {
   if (!getLangOpts().CPlusPlusModules || !Result.isModuleContextualKeyword())
@@ -1418,11 +1443,18 @@ bool Preprocessor::HandleModuleContextualKeyword(Token &Result) {
   llvm::SaveAndRestore<bool> SavedParsingPreprocessorDirective(
       CurPPLexer->ParsingPreprocessorDirective, true);
 
+  // A backtick after module or import begins an escaped first component of
+  // the module name (escape-module-names); -fbacktick only.
+  auto IsEscapedName = [&](const Token &Tok) {
+    return getLangOpts().Backtick && Tok.is(tok::backtick);
+  };
+
   if (II->isModuleKeyword()) {
     if (auto NextTok = peekNextPPToken()) {
       if (NextTok->is(tok::raw_identifier))
         LookUpIdentifierInfo(*NextTok);
-      if (NextTok->isOneOf(tok::identifier, tok::colon, tok::semi)) {
+      if (IsEscapedName(*NextTok) ||
+          NextTok->isOneOf(tok::identifier, tok::colon, tok::semi)) {
         Result.setKind(tok::kw_module);
         ModuleDeclLoc = Result.getLocation();
         return true;
@@ -1437,7 +1469,8 @@ bool Preprocessor::HandleModuleContextualKeyword(Token &Result) {
     if (auto NextTok = peekNextPPToken()) {
       if (NextTok->is(tok::raw_identifier))
         LookUpIdentifierInfo(*NextTok);
-      if (NextTok->isOneOf(tok::header_name, tok::identifier, tok::colon,
+      if (IsEscapedName(*NextTok) ||
+          NextTok->isOneOf(tok::header_name, tok::identifier, tok::colon,
                            tok::less, tok::code_completion)) {
         Result.setKind(tok::kw_import);
         ModuleImportLoc = Result.getLocation();
