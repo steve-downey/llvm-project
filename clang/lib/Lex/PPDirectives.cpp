@@ -4241,7 +4241,8 @@ void Preprocessor::HandleCXXImportDirective(Token ImportTok) {
     UseLoc = Tok.getLocation();
     Lex(Tok);
     [[fallthrough]];
-  case tok::identifier: {
+  case tok::identifier:
+  case tok::backtick: { // An escaped component; -fbacktick only.
     if (HandleModuleName(ImportTok.getIdentifierInfo()->getName(), UseLoc, Tok,
                          Path, DirToks, /*AllowMacroExpansion=*/true,
                          IsPartition))
@@ -4381,7 +4382,8 @@ void Preprocessor::HandleCXXModuleDirective(Token ModuleTok) {
     }
     DirToks.push_back(Tok);
     break;
-  case tok::identifier: {
+  case tok::identifier:
+  case tok::backtick: { // An escaped component; -fbacktick only.
     if (HandleModuleName(ModuleTok.getIdentifierInfo()->getName(), UseLoc, Tok,
                          Path, DirToks, /*AllowMacroExpansion=*/false,
                          /*IsPartition=*/false))

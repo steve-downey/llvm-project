@@ -4667,6 +4667,11 @@ const char *Lexer::convertDependencyDirectiveToken(
   Result.setKind(DDTok.Kind);
   Result.setFlag((Token::TokenFlags)DDTok.Flags);
   Result.setLength(DDTok.Length);
+  // The scanner lexes without -fbacktick, so a backtick reaches us as an
+  // unknown token; it is the punctuator here exactly when it would have been
+  // in the source (docs/backtick-operator-design.md, escape-module-names).
+  if (LangOpts.Backtick && Result.is(tok::unknown) && *TokPtr == '`')
+    Result.setKind(tok::backtick);
   if (Result.is(tok::raw_identifier))
     Result.setRawIdentifierData(TokPtr);
   else if (Result.isLiteral())
