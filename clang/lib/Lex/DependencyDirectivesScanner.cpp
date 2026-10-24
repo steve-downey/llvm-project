@@ -755,8 +755,16 @@ bool Scanner::lexModule(const char *&First, const char *const End) {
     }
     // `import:(type)name` is a valid ObjC method decl, so check one more token.
     (void)lexToken(First, End);
-    if (!tryLexIdentifierOrSkipLine(First, End))
+    // An escaped partition, import :`word`; (-fbacktick, escape-module-names).
+    // The scanner lexes without the flag, so the backtick is an unknown token.
+    if (const dependency_directives_scan::Token &Tok = lexToken(First, End);
+        Tok.is(tok::unknown) && Input[Tok.Offset] == '`')
+      break;
+    else if (Tok.isNot(tok::raw_identifier)) {
+      if (!Tok.is(tok::eod))
+        skipLine(First, End);
       return false;
+    }
     break;
   }
   case ';': {
@@ -768,6 +776,11 @@ bool Scanner::lexModule(const char *&First, const char *const End) {
   }
   case '<':
   case '"':
+    break;
+  case '`':
+    // An escaped first component, `word` (-fbacktick). The scanner does not
+    // know the flag; the preprocessor that replays the directive decides
+    // (docs/backtick-operator-design.md, escape-module-names).
     break;
   default:
     if (!isAsciiIdentifierContinue(*First)) {
