@@ -416,12 +416,12 @@ DeclarationName DeclarationNameTable::getCXXUserOperatorName(uint32_t CP) {
   llvm::FoldingSetNodeID ID;
   ID.AddInteger(CP);
 
-  void *InsertPos = nullptr;
-  if (auto *Name = CXXUserOperatorNames.FindNodeOrInsertPos(ID, InsertPos))
+  llvm::FoldingSetInsertToken Token;
+  if (auto *Name = CXXUserOperatorNames.lookup(ID, Token))
     return DeclarationName(Name);
 
   auto *UserOpName = new (Ctx) detail::CXXUserOperatorIdName(CP);
-  CXXUserOperatorNames.InsertNode(UserOpName, InsertPos);
+  CXXUserOperatorNames.insert(UserOpName, Token);
   return DeclarationName(UserOpName);
 }
 
