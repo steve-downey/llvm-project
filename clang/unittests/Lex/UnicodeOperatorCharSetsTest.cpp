@@ -194,12 +194,12 @@ TEST(UnicodeOperatorCharSetsTest, NonExclusionsReportNoReason) {
 // UCD 17.0 (DEV-U01), so this is a *stronger* check than the design claims:
 // U1@17.0 stays out of identifier space even after the UCD moved under it.
 TEST(UnicodeOperatorCharSetsTest, UserOperatorsAreNeverIdentifierChars) {
-  llvm::sys::UnicodeCharSet XIDStart(XIDStartRanges);
-  llvm::sys::UnicodeCharSet XIDContinue(XIDContinueRanges);
+  llvm::sys::UnicodeCharSet XIDStart(GeneratedXIDStartRanges);
+  llvm::sys::UnicodeCharSet XIDContinue(GeneratedXIDContinueRanges);
   llvm::sys::UnicodeCharSet MathStart(
-      MathematicalNotationProfileIDStartRanges);
+      GeneratedMathematicalNotationProfileIDStartRanges);
   llvm::sys::UnicodeCharSet MathContinue(
-      MathematicalNotationProfileIDContinueRanges);
+      GeneratedMathematicalNotationProfileIDContinueRanges);
   llvm::sys::UnicodeCharSet C11Allowed(C11AllowedIDCharRanges);
 
   size_t Checked = 0;
@@ -226,7 +226,7 @@ TEST(UnicodeOperatorCharSetsTest, UserOperatorsAreNeverIdentifierChars) {
 // both are outside the U1 blocks anyway.
 TEST(UnicodeOperatorCharSetsTest, TightestGapAgainstMathIdentifiers) {
   llvm::sys::UnicodeCharSet MathContinue(
-      MathematicalNotationProfileIDContinueRanges);
+      GeneratedMathematicalNotationProfileIDContinueRanges);
   EXPECT_FALSE(isUserOperatorChar(0x205E));
   EXPECT_FALSE(MathContinue.contains(0x205E));
   EXPECT_TRUE(MathContinue.contains(0x2070)); // ⁰, the identifier side

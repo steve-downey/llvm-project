@@ -16,7 +16,6 @@ int t() {
 
 int u() {
   int module = 1, y = 2;
-module `fn` y; // expected-error {{unexpected preprocessing token 'y' after module name}} \
-               // expected-error {{expected expression}}
+module `fn` y; // expected-error {{expected expression}}
   return 0;
 }

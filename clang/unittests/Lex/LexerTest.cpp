@@ -64,6 +64,14 @@ protected:
     PP->EnterMainSourceFile();
   }
 
+  // Lex another source in the same test: a Preprocessor initializes its
+  // target only once, so each source gets a fresh one.
+  void ResetPP() {
+    SourceMgr.clearIDTables();
+    PP = std::make_unique<Preprocessor>(PPOpts, Diags, LangOpts, SourceMgr,
+                                        HeaderInfo, ModLoader);
+  }
+
   std::vector<Token> Lex(StringRef Source) {
     InitializePP(Source);
 
@@ -1019,7 +1027,7 @@ TEST_F(LexerTest, UnicodeOperatorUCNSpellingsAreOneOperator) {
     EXPECT_EQ(0x229Eu,
               Lexer::getUserOperatorCodePoint(Toks[1], SourceMgr, LangOpts))
         << Source;
-    SourceMgr.clearIDTables();
+    ResetPP();
   }
 }
 
@@ -1046,7 +1054,7 @@ TEST_F(LexerTest, UnicodeOperatorUCNAdjacency) {
     EXPECT_EQ(0x229Eu,
               Lexer::getUserOperatorCodePoint(Toks[1], SourceMgr, LangOpts))
         << Source;
-    SourceMgr.clearIDTables();
+    ResetPP();
   }
 }
 
@@ -1058,7 +1066,7 @@ TEST_F(LexerTest, UnicodeOperatorUCNRequiresTheFlag) {
   for (StringRef Source : {"a \\u229E b", "a \\N{SQUARED PLUS} b"}) {
     for (const Token &Tok : Lex(Source))
       EXPECT_FALSE(Tok.is(tok::user_operator)) << Source;
-    SourceMgr.clearIDTables();
+    ResetPP();
   }
 }
 
@@ -1074,7 +1082,7 @@ TEST_F(LexerTest, UnicodeOperatorUCNOfExcludedCodePointIsNotAToken) {
   for (StringRef Source : {"a \\u2212 b", "a \\N{MINUS SIGN} b"}) {
     for (const Token &Tok : Lex(Source))
       EXPECT_FALSE(Tok.is(tok::user_operator)) << Source;
-    SourceMgr.clearIDTables();
+    ResetPP();
   }
 }
 
@@ -1105,7 +1113,7 @@ TEST_F(LexerTest, UnicodeOperatorExcludedCodePointEndsAnIdentifier) {
     ASSERT_EQ(1u, Toks.size()) << Source;
     EXPECT_TRUE(Toks[0].is(tok::identifier)) << Source;
     EXPECT_EQ(1u, Toks[0].getLength()) << Source;
-    SourceMgr.clearIDTables();
+    ResetPP();
   }
 }
 

@@ -70,7 +70,7 @@ enum class UserOperatorExclusionReason {
   /// TR31 7.1's mathematical notation profile earmarks it as an
   /// *identifier* character: it names things, it does not combine them.
   /// Clang already admits these as identifiers; see
-  /// MathematicalNotationProfileIDStartRanges in UnicodeCharSets.h.
+  /// GeneratedMathematicalNotationProfileIDStartRanges in UnicodeCharSets.h.
   IdentifierProfile,
   /// UTS #39 confusable with an existing C++ token. Rejected outright,
   /// never aliased: something that looks like `-` but is not must fail to
